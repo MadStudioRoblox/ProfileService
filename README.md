@@ -25,6 +25,9 @@ ProfileService **is an abstraction** of DataStore profiles, which means that it 
 ProfileService allows you to easily maintain player profiles that remain loaded even after the player leaves which can be handy for certain competitive games like MMO's (A game where you would lose your items if you get killed in combat). If you're willing to go to such lengths, at least :P.
 
 ## Setting up
+
+Roblox library: https://www.roblox.com/library/5331689994/ProfileService
+
 ProfileService.lua is supposed to be a ModuleScript which you can place inside your Roblox place's ServerScriptService or wherever else you prefer. ProfileService can only be used server-side. Access the ProfileService functions through the declared variable within another Script or ModuleScript:
 ```lua
 local ProfileService = require(game.ServerScriptService.ProfileService)
