@@ -34,6 +34,9 @@ local ProfileService = require(game.ServerScriptService.ProfileService)
 ```
 Before use, I advise getting familiar with the Roblox [DataStore documentation](https://developer.roblox.com/en-us/articles/Data-store)
 ## API
+
+> WARNING: Never yield (use wait() or asynchronous Roblox API calls) inside listener functions
+
 ### ProfileService:
 ***Members:*** (variables)
 ```lua
