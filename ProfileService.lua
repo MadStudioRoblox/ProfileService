@@ -33,7 +33,7 @@
 		
 	Methods [ProfileStore]:
 	
-		ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [Profile / nil] not_released_handler(place_id, game_job_id) 
+		ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [Profile / nil] not_released_handler(place_id, game_job_id)
 		ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler) --> [GlobalUpdates / nil] (update_handler(GlobalUpdates))
 			-- Returns GlobalUpdates object if update was successful, otherwise returns nil
 		
@@ -52,8 +52,8 @@
 				function may yield for as long as desirable and must return one of three string values:
 					["Repeat"] - ProfileService will repeat the profile loading proccess and may trigger the release handler again
 					["Cancel"] - ProfileStore:LoadProfileAsync() will immediately return nil
-					["ForceLoad"] - ProfileService will repeat the profile loading call, but will return Profile object afterwards
-						and release the profile for another session that has loaded the profile
+					["ForceLoad"] - ProfileService will repeat the profile loading call while trying to make the owner game server
+						release the profile. It will "steal" the profile ownership if the server doesn't release the profile in time.
 						
 		* Parameter description for "ProfileStore:GlobalUpdateProfileAsync()":
 		
