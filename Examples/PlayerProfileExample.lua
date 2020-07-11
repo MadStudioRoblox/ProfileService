@@ -38,6 +38,9 @@ local function PlayerAdded(player)
 		else
 			profile:Release() -- Player left before the profile loaded
 		end
+	else
+		player:Kick() -- The profile couldn't be loaded possibly due to other
+		--   Roblox servers trying to load this profile at the same time
 	end
 end
 
