@@ -134,11 +134,11 @@ local SETTINGS = {
 
 local ProfileService = {
 
-	ServiceLocked = false, -- Set to true once the server is shutting down - Calling ProfileService methods afterwards will result in an error
+	ServiceLocked = false, -- Set to true once the server is shutting down - Calling ProfileService functions afterwards will result in an error
 	
 	IssueSignal = nil, -- [ScriptSignal] (error_message) -- Fired when a DataStore API call throws an error
 	CorruptionSignal = nil,  -- [ScriptSignal] (profile_store_name, profile_key) -- Fired when DataStore key returns a value that has
-		-- all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a noon table value
+		-- all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a non table value
 	
 	CriticalState = false, -- Set to true while DataStore service is throwing too many errors
 	CriticalStateSignal = nil, -- [ScriptSignal] (is_critical_state) -- Fired when CriticalState is set to true
