@@ -193,7 +193,6 @@ Global updates can be `Active`, `Locked` and `Cleared`:
  - `Locked` updates can no longer be **changed** or **cleared** within a `:GlobalUpdateProfileAsync()` call
  - `Locked` updates are ready to be processed (e.g., add gift to player inventory) and imediately `Locked` by calling `:LockActiveUpdate(update_id)`
  - `Cleared` updates will immediately disappear from the profile forever
-```
 
 ***Always available:***
 ```lua
