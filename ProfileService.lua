@@ -148,7 +148,7 @@ local ProfileService = {
 
 	_profile_stores = {
 		--[[
-			[profile_store_name] = {
+			{
 				_profile_store_name = "", -- [string] -- DataStore name
 				_profile_template = {} / nil, -- [table / nil]
 				_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
@@ -1058,10 +1058,14 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 	end
 	
 	-- Check if profile with profile_key isn't already loaded in this session:
-	for _, loaded_profile in pairs(self._loaded_profiles) do
-		if profile_key == loaded_profile._profile_key then
-			error("[ProfileService]: Profile of ProfileStore \"" .. self._profile_store_name .. "\" with key \"" .. profile_key .. "\" is already loaded in this session")
-			-- Are you using Profile:Release() properly?
+	for _, profile_store in ipairs(ProfileStores) do
+		if profile_store._profile_store_name == self._profile_store_name then
+			for _, loaded_profile in pairs(profile_store._loaded_profiles) do
+				if profile_key == loaded_profile._profile_key then
+					error("[ProfileService]: Profile of ProfileStore \"" .. self._profile_store_name .. "\" with key \"" .. profile_key .. "\" is already loaded in this session")
+					-- Are you using Profile:Release() properly?
+				end
+			end
 		end
 	end
 	
@@ -1356,10 +1360,6 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		error("[ProfileService]: Invalid profile_template")
 	end
 	
-	if ProfileStores[profile_store_name] ~= nil then
-		error("[ProfileService]: ProfileStore of given name already loaded")
-	end
-	
 	local profile_store = {
 		_profile_store_name = profile_store_name,
 		_profile_template = profile_template,
@@ -1371,7 +1371,7 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
 	end
 	setmetatable(profile_store, ProfileStore)
-	ProfileStores[profile_store_name] = profile_store
+	table.insert(ProfileStores, profile_store)
 	return profile_store
 end
 
