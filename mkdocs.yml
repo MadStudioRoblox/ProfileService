@@ -14,6 +14,7 @@ nav:
   - Tutorial:
     - Setting up: tutorial/settingup.md
     - Basic Usage: tutorial/basic_usage.md
+  - Troubleshooting: troubleshooting.md
   - API: api.md
 
 markdown_extensions:
