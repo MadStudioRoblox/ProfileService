@@ -199,12 +199,12 @@ Global updates can be `Active`, `Locked` and `Cleared`:
 
 ***Always available:***
 ```lua
-GlobalUpdates:GetActiveUpdates() --> [table] {{update_id, update_data}, ...}
+GlobalUpdates:GetActiveUpdates() --> [table] { {update_id, update_data}, ...}
 -- Should be used at startup to progress any pending
 --   active updates to locked state
 ```
 ```lua
-GlobalUpdates:GetLockedUpdates() --> [table] {{update_id, update_data}, ...}
+GlobalUpdates:GetLockedUpdates() --> [table] { {update_id, update_data}, ...}
 -- Should be used at startup to progress any pending
 --   locked updates to cleared state
 ```
