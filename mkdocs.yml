@@ -1,13 +1,13 @@
-theme:
-  name: material
-  palette:
-    primary: "Deep purple"
-    accent: "Deep purple"
-
 site_name: ProfileService
 site_url: https://madstudioroblox.github.io/ProfileService
 repo_name: MadStudioRoblox/ProfileService
 repo_url: https://github.com/MadStudioRoblox/ProfileService
+
+theme:
+  name: material
+  palette:
+    primary: "Deep Purple"
+    accent: "Deep Purple"
 
 nav:
   - Home: index.md
