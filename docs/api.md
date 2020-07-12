@@ -248,18 +248,18 @@ Global updates can be `Active`, `Locked` and `Cleared`:
 
 #### GlobalUpdates:GetActiveUpdates()
 ```lua
-GlobalUpdates:GetActiveUpdates() -> [table] {{update_id, update_data}, ...}
+GlobalUpdates:GetActiveUpdates() --> [table] { {update_id, update_data}, ...}
 ```
 Should be used at startup to scan and progress any pending `Active` updates to `Locked` state.
 #### GlobalUpdates:GetLockedUpdates()
 ```lua
-GlobalUpdates:GetLockedUpdates() -> [table] {{update_id, update_data}, ...}
+GlobalUpdates:GetLockedUpdates() --> [table] { {update_id, update_data}, ...}
 ```
 Should be used at startup to scan and progress any pending `Locked` updates to `Cleared` state.
 ### ***Only when accessed from `Profile.GlobalUpdates`***
 #### GlobalUpdates:ListenToNewActiveUpdate()
 ```lua
-GlobalUpdates:ListenToNewActiveUpdate(listener) -> [ScriptConnection]
+GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection]
 -- listener   [function](update_id, update_data)
 ```
 In most games, you should progress all `Active` updates to `Locked` state:
@@ -270,7 +270,7 @@ end)
 ```
 #### GlobalUpdates:ListenToNewLockedUpdate()
 ```lua
-GlobalUpdates:ListenToNewLockedUpdate(listener) -> [ScriptConnection]
+GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection]
 -- listener   [function](update_id, update_data)
 -- Must always call GlobalUpdates:ClearLockedUpdate(update_id)
 --   after processing the locked update.
