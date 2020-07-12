@@ -10,11 +10,11 @@ theme:
     accent: "Deep Purple"
 
 nav:
-  - Home: docs/index.md
+  - Home: index.md
   - Tutorial:
-    - Setting up: docs/tutorial/settingup.md
-    - Basic Usage: docs/tutorial/basic_usage.md
-  - API: docs/api.md
+    - Setting up: tutorial/settingup.md
+    - Basic Usage: tutorial/basic_usage.md
+  - API: api.md
 
 markdown_extensions:
   - admonition
