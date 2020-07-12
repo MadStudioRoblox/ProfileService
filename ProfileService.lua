@@ -22,7 +22,6 @@
 	Functions:
 	
 		ProfileService.GetProfileStore(profile_store_name, profile_template) --> [ProfileStore]
-			-- WARNING: Only one ProfileStore can exist for a given profile_store_name in a game session!
 		
 		* Parameter description for "ProfileService.GetProfileStore()":
 		
