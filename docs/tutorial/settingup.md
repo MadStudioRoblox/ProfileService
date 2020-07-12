@@ -1,4 +1,4 @@
-**ProfileService** is supposed to be a ModuleScript which you can place inside your Roblox place's **ServerScriptService** or wherever else you prefer. ProfileService can only be used server-side
+ProfileService is supposed to be a ModuleScript which you can place inside your Roblox game's *ServerScriptService* or wherever else is preferred. ProfileService can only be used server-side
 
 ### Option #1: Get ProfileService from the Roblox library
 
