@@ -145,7 +145,7 @@ local ProfileService = {
 	
 	ServiceIssueCount = 0,
 
-	_profile_stores = {
+	_active_profile_stores = {
 		--[[
 			{
 				_profile_store_name = "", -- [string] -- DataStore name
@@ -233,7 +233,7 @@ local ProfileService = {
 
 ----- Private Variables -----
 
-local ProfileStores = ProfileService._profile_stores
+local ActiveProfileStores = ProfileService._active_profile_stores
 local AutoSaveList = ProfileService._auto_save_list
 local IssueQueue = ProfileService._issue_queue
 
@@ -491,7 +491,14 @@ local function ReleaseProfileInternally(profile)
 	-- 1) Remove profile object from ProfileService references: --
 	-- Clear reference in ProfileStore:
 	local profile_store = profile._profile_store
-	profile_store._loaded_profiles[profile._id] = nil
+	local loaded_profiles = profile_store._loaded_profiles
+	loaded_profiles[profile._id] = nil
+	if next(loaded_profiles) == nil then -- ProfileStore has turned inactive
+		local index = table.find(ActiveProfileStores, profile_store)
+		if index ~= nil then
+			table.remove(ActiveProfileStores, index)
+		end
+	end
 	-- Clear auto update reference:
 	RemoveProfileFromAutoSave(profile)
 	-- 2) Trigger release listeners: --
@@ -1057,7 +1064,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 	end
 	
 	-- Check if profile with profile_key isn't already loaded in this session:
-	for _, profile_store in ipairs(ProfileStores) do
+	for _, profile_store in ipairs(ActiveProfileStores) do
 		if profile_store._profile_store_name == self._profile_store_name then
 			for _, loaded_profile in pairs(profile_store._loaded_profiles) do
 				if profile_key == loaded_profile._profile_key then
@@ -1184,6 +1191,9 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 					setmetatable(profile, Profile)
 					global_updates_object._profile = profile
 					-- Referencing Profile object in ProfileStore:
+					if next(self._loaded_profiles) == nil then -- ProfileStore object was inactive
+						table.insert(ActiveProfileStores, self)
+					end
 					self._loaded_profiles[ProfileIndex] = profile
 					-- Adding profile to AutoSaveList;
 					AddProfileToAutoSave(profile)
@@ -1370,7 +1380,6 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
 	end
 	setmetatable(profile_store, ProfileStore)
-	table.insert(ProfileStores, profile_store)
 	return profile_store
 end
 
