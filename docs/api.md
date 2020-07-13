@@ -98,7 +98,7 @@ responding in time and for handling crashed server session-locks).
     This case should be extremely rare and it would be recommended to [:Kick()](https://developer.roblox.com/en-us/api-reference/function/Player/Kick) the player if `:LoadProfileAsync()` does
     not return a `Profile` object.
 
-!!! failure "Do not load a profile of the same key before releasing it"
+!!! failure "Do not load a profile of the same key again before it is released"
     Trying to load a profile that has already been session-locked on the same server will result in an error. You may, however, instantly load the profile again after relasing it with `Profile:Release()`.
 
 ### ProfileStore:GlobalUpdateProfileAsync()
