@@ -1,10 +1,12 @@
 # Home
 
-ProfileService is a stand-alone ModuleScript that particularly specialises in loading and auto-saving
-DataStore profiles as well as providing easy tools for managing session-locking of those profiles.
+ProfileService is a stand-alone ModuleScript that specialises in loading and auto-saving
+DataStore profiles.
 
-Essentially, I'm providing you a ModuleScript that loads up a regular Lua table you can write to directly.
-It handles auto-saving, multiple server session-locking collisions, server shutdowns and crashes for you.
+A DataStore `Profile` (Later referred to as just `Profile`) is a set of data which is meant to be loaded up
+**only once** inside a Roblox server and then written to and read from locally on that server
+(With no delays associated with talking with the DataStore every time data changes) whilst being
+periodically auto-saved and saved immediately once after the server finishes working with the `Profile`.
 
 If anything is missing or broken, [file an issue on GitHub](https://github.com/MadStudioRoblox/ProfileService/issues).
 
@@ -14,14 +16,9 @@ If you need help integrating ProfileService into your project, [join the discuss
 
 # Why not DataStore2?
 
-The ideology of [DataStore2](https://devforum.roblox.com/t/how-to-use-datastore2-data-store-caching-and-data-loss-prevention/136317) (Berezaa method) is to _"Make your game playable no matter what, no matter the cost"_.
-If you're familiar with what you're doing, then it _might_ be a viable solution. However, it might not be productive to glorify
-a module for it's reliability when there have been no other open source solutions for preventing data loss and item duplication problems.
+[DataStore2](https://devforum.roblox.com/t/how-to-use-datastore2-data-store-caching-and-data-loss-prevention/136317) is mostly a Roblox DataStore wrapper which automatically saves duplicates of your data, while [ProfileService](https://devforum.roblox.com/t/profileservice-a-datastore-module/667805) is an extension which gives new higher level functionality for the Roblox DataStore.
+
+ProfileService is designed to protect your data only from the relevant Roblox server problems and **completely stacked** when it comes to protecting your game data from [item duplication exploits](https://www.youtube.com/watch?v=Bz5Rje4HnM4).
 
 ProfileService is striving to be a DataStore solution that is the most accurate implementation of data storage following the
 development guidelines and practices provided in the [official Roblox API](https://developer.roblox.com/en-us/articles/Data-store).
-It's also lightweight, featuring only the most essential functionalities for your personal implementation and guiding you away from
-flawed practices.
-
-Lets not forget that a fair slice of data protection responsibility falls on the shoulders of the developer as well - data loss is possible
-no matter the module you choose to use. Test your systems!
