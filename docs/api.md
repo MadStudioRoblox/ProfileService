@@ -259,12 +259,27 @@ Global updates can be `Active`, `Locked` and `Cleared`:
 ```lua
 GlobalUpdates:GetActiveUpdates() --> [table] { {update_id, update_data}, ...}
 ```
-Should be used at startup to scan and progress any pending `Active` updates to `Locked` state.
+Should be used immediately after a `Profile` is loaded to scan and progress any pending `Active` updates to `Locked` state:
+```lua
+for _, update in ipairs(profile.GlobalUpdates:GetActiveUpdates()) do
+  profile.GlobalUpdates:LockActiveUpdate(update[1])
+end
+```
 #### GlobalUpdates:GetLockedUpdates()
 ```lua
 GlobalUpdates:GetLockedUpdates() --> [table] { {update_id, update_data}, ...}
 ```
-Should be used at startup to scan and progress any pending `Locked` updates to `Cleared` state.
+Should be used immediately after a `Profile` is loaded to scan and progress any pending `Locked` updates to `Cleared` state:
+```lua
+for _, update in ipairs(profile.GlobalUpdates:GetActiveUpdates()) do
+  local update_id = update[1]
+  local update_data = update[2]
+  if update_data.Type == "AdminGift" and update_data.Item == "Coins" then
+    profile.Data.Coins = profile.Data.Coins + update_data.Amount
+  end
+  profile.GlobalUpdates:ClearLockedUpdate(update_id)
+end
+```
 ### ***Only when accessed from `Profile.GlobalUpdates`***
 #### GlobalUpdates:ListenToNewActiveUpdate()
 ```lua
