@@ -271,7 +271,7 @@ GlobalUpdates:GetLockedUpdates() --> [table] { {update_id, update_data}, ...}
 ```
 Should be used immediately after a `Profile` is loaded to scan and progress any pending `Locked` updates to `Cleared` state:
 ```lua
-for _, update in ipairs(profile.GlobalUpdates:GetActiveUpdates()) do
+for _, update in ipairs(profile.GlobalUpdates:GetLockedUpdates()) do
   local update_id = update[1]
   local update_data = update[2]
   if update_data.Type == "AdminGift" and update_data.Item == "Coins" then
