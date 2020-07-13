@@ -15,7 +15,7 @@ for unserializable data types for efficiency reasons. Consequently, you must be 
 - Storing cyclic tables (e.g., `Profile.Data = {Self = Profile.Data}`).
 - Storing any `userdata` including `Instance`, `Vector3`, `CFrame`, `Udim2`, etc. Check whether your value is a `userdata` by running `print(type(value) == "userdata")` (e.g., `Profile.Data = {LastPosition = Vector3.new(0, 0, 0)}`) - You will have to manually convert your `userdata` to tables, numbers and strings for storage (e.g., `Profile.Data = {LastPosition = {0, 0, 0} }`).
 
-This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/articles/Datastore-Errors), not ProfileService.
+This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/articles/Datastore-Errors) which ProfileService is based on.
 
 !!! warning
     Failure to prevent these data types may result in silent data loss, silent errors, lots of fatal errors and general failure to save data.
