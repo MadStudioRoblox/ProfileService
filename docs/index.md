@@ -16,7 +16,7 @@ servers. ProfileService automatically spreads the DataStore API calls evenly wit
 - **Already does the things you wouldn't dare script yourself (but should)** - session-locking is essential to keeping your data
 protected from multiple server editing - this is a potential cause of item loss or item duplication loopholes. ProfileService
 offers a very comprehensive and short API for handling session-locking yourself or just letting ProfileService do it automatically for you.
-- **Future-proof** - with features like `Profile.MetaTags` and `Profile.GlobalUpdates`, you will always be able to add new functionality to your profiles without headaches.
+- **Future-proof** - with features like `MetaTags` and `GlobalUpdates`, you will always be able to add new functionality to your profiles without headaches.
 - **Made for ambitious projects** - ProfileService is a **profile object abstraction** detached from the `Player` instance - this allows the developer to create profiles for entities other than players, such as: group-owned houses, savable multiplayer game instances, etc.
 
 If anything is missing or broken, [file an issue on GitHub](https://github.com/MadStudioRoblox/ProfileService/issues).
