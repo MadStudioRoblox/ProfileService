@@ -111,6 +111,10 @@ ProfileStore:GlobalUpdateProfileAsync(
 -- update_handler   [function](global_updates) -- This function is
 --   called with a GlobalUpdates object
 ```
+
+Used to create and manage `Active` global updates for a specified `Profile`. Can be called on any Roblox server of your game.
+Updates should reach the recipient in less than 30 seconds, regardless of whether it was called on the same server the `Profile` is session-locked to. See [Global Updates](#global-updates) for more information.
+
 Example usage of `:GlobalUpdateProfileAsync()`:
 ```lua
 ProfileStore:GlobalUpdateProfileAsync(
@@ -128,6 +132,8 @@ ProfileStore:GlobalUpdateProfileAsync(
 !!! notice
     `:GlobalUpdateProfileAsync()` will work for profiles that haven't been created (profiles are created when they're
     loaded using `:LoadProfileAsync()` for the first time)
+
+!!! failure "Yielding inside the `update_handler` function will throw an error"
 
 ### ProfileStore:ViewProfileAsync()
 ```lua
@@ -240,9 +246,9 @@ this is already done for you automatically.
     Calling `Profile:Save()` when the `Profile` is released will throw an error.
     You can check `Profile:IsActive()` before using this method.
 
-## GlobalUpdates
+## Global Updates
 
-Global updates is a powerful feature of ProfileService, used for sending information to a desired player profile across servers, within the server or to a player profile that is not currently active in any Roblox server. The primary intended use of global updates is to support sending gifts among players, or giving items to players through a custom admin tool. The benefit of using global updates is it's API simplicity (This is as simple as it gets, sorry 😂) and the fact that global updates are pulled from the DataStore whenever the profile is auto-saved **at no additional expense of more DataStore calls!**
+Global updates is a powerful feature of ProfileService, used for sending information to a desired player profile across servers, within the server or to a player profile that is not currently active in any Roblox server (Kind of like [MessagingService](https://developer.roblox.com/en-us/api-reference/class/MessagingService), but slower and doesn't require the recipient to be active). The primary intended use of global updates is to support sending gifts among players, or giving items to players through a custom admin tool. The benefit of using global updates is it's API simplicity (This is as simple as it gets, sorry 😂) and the fact that global updates are pulled from the DataStore whenever the profile is auto-saved **at no additional expense of more DataStore calls!**
 
 Global updates can be `Active`, `Locked` and `Cleared`:
 
