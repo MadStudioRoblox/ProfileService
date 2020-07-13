@@ -1,27 +1,31 @@
-
 # Madwork - ProfileService
-ProfileService.lua is a stand-alone ModuleScript that handles the loading and saving of your game's DataStore profiles (reffered to as just "profiles" later on) along with additional power user features such as:
 
-- **Profile session ownership handling** (A case when another Roblox server is still using the profile)
-- **Global updates** (An easy way of setting up a gifts among players system)
-- **"MetaTags"** (A handy organizational feature for storing information about the profile itself)
+ProfileService is a stand-alone ModuleScript that specialises in loading and auto-saving
+DataStore profiles.
 
+A DataStore `Profile` (Later referred to as just `Profile`) is a set of data which is meant to be loaded up
+**only once** inside a Roblox server and then written to and read from locally on that server
+(With no delays associated with talking with the DataStore every time data changes) whilst being
+periodically auto-saved and saved immediately once after the server finishes working with the `Profile`.
+
+The benefits of using ProfileService for your game's profiles are:
+
+- **Easy to learn, and eventually forget** - ProfileService does not give you any data getter or setter functions. It gives you the freedom to write your own data interface.
+
+- **Built for massive scalability** - low resource footprint, no excessive type checking. Great for 100+ player servers. ProfileService automatically spreads the DataStore API calls evenly within the auto-save loop timeframe.
+
+- **Already does the things you wouldn't dare script yourself (but should)** - session-locking is essential to keeping your data protected from multiple server editing - this is a potential cause of item loss or item duplication loopholes. ProfileService offers a very comprehensive and short API for handling session-locking yourself or just letting ProfileService do it automatically for you.
+
+- **Future-proof** - with features like `MetaTags` and `GlobalUpdates`, you will always be able to add new functionality to your profiles without headaches.
+
+- **Made for ambitious projects** - ProfileService is a **profile object abstraction** detached from the `Player` instance - this allows the developer to create profiles for entities other than players, such as: group-owned houses, savable multiplayer game instances, etc.
+
+---
 *ProfileService is part of the **Madwork** framework*
 *Developed by [loleris](https://twitter.com/LM_loleris)*
 
-## API:
-[ProfileService documentation](https://madstudioroblox.github.io/ProfileService/)
+***It's documented:***
+**[ProfileService wiki](https://madstudioroblox.github.io/ProfileService/)**
 
-## Why?
-
-The most common issues Roblox developers run into when creating their own DataStore modules are:
-
- - Getting confused on how to handle DataStore errors
- - Having to rewrite their DataStore code for every new project
- - Experiencing player data loss
-
-ProfileService is the perfect solution to the regular DataStore usage when data from the DataStore is loaded once and only auto-saved (and saved after finishing work) afterwards.
-
-ProfileService **is an abstraction** of DataStore profiles, which means that it is not tied to the `Player` instance and can be easily used for various game features like **group owned houses** where house data could not be tied to a particular player profile and the group owned house would preferably only be loaded on a single Roblox server.
-
-ProfileService allows you to easily maintain player profiles that remain loaded even after the player leaves which can be handy for certain competitive games like MMO's (A game where you would lose your items if you get killed in combat). If you're willing to go to such lengths, at least 😛.
+***It's open source:***
+[Roblox library](https://www.roblox.com/library/5331689994/ProfileService)
