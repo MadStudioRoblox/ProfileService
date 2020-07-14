@@ -6,8 +6,16 @@
 	(STANDALONE VERSION)
 	DataStore profiles - universal session-locked savable table API
 	
+	Official documentation:
+		https://madstudioroblox.github.io/ProfileService/
+
+	DevForum discussion:
+		https://devforum.roblox.com/t/ProfileService/667805
+	
 	WARNINGS FOR "Profile.Data" VALUES:
-	 	! Do not create numeric tables with gaps - attempting to replicate such tables will result in an error;
+		More information on https://madstudioroblox.github.io/ProfileService/troubleshooting/
+		! Do not store NaN values
+	 	! Do not create array tables with non-sequential indexes - attempting to replicate such tables will result in an error;
 		! Do not create mixed tables (some values indexed by number and others by string key), as only
 		     the data indexed by number will be replicated.
 		! Do not index tables by anything other than numbers and strings.
@@ -99,18 +107,18 @@
 		
 	Methods [GlobalUpdates]:
 	
-	-- ALWAYS PUBLIC:
+	-- ALWAYS AVAILABLE:
 		GlobalUpdates:GetActiveUpdates() --> [table] {{update_id, update_data}, ...}
 		GlobalUpdates:GetLockedUpdates() --> [table] {{update_id, update_data}, ...}
 		
-	-- ONLY WHEN FROM "Profile.GlobalUpdates":
+	-- ONLY ACCESSIBLE THROUGH "Profile.GlobalUpdates":
 		GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
 		GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
 		-- WARNING: GlobalUpdates:LockUpdate() and GlobalUpdates:ClearLockedUpdate() will error after profile expires
 		GlobalUpdates:LockActiveUpdate(update_id)
 		GlobalUpdates:ClearLockedUpdate(update_id)
 		
-	-- EXPOSED TO "update_handler" DURING ProfileStore:GlobalUpdateProfileAsync() CALL
+	-- AVAILABLE INSIDE "update_handler" DURING A ProfileStore:GlobalUpdateProfileAsync() CALL
 		GlobalUpdates:AddActiveUpdate(update_data)
 		GlobalUpdates:ChangeActiveUpdate(update_id, update_data)
 		GlobalUpdates:ClearActiveUpdate(update_id)
