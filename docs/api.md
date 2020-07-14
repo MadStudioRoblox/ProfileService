@@ -212,7 +212,7 @@ locally (`Profile:Release()`). In common practice, the profile will rarely be re
 the player leaves the game so it's recommended to simply [:Kick()](https://developer.roblox.com/en-us/api-reference/function/Player/Kick) the Player when this happens.
 
 !!! warning
-    When `Profile:ListenToRelease()` is triggered, it is too late to change `Profile.Data` for the final time.
+    After `Profile:ListenToRelease()` is triggered, it is too late to change `Profile.Data` for the final time.
     As long as the profile is active (`Profile:IsActive()` == `true`), you should store all profile related data
     immediately after it becomes available. An item trading operation between two profiles must happen without
     any yielding after it is confirmed that both profiles are active.
