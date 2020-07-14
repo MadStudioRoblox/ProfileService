@@ -181,9 +181,6 @@ Profile.MetaData.MetaTagsLatest [table] (Read-only)
 `Profile.MetaData` is a table containing data about the profile itself. `Profile.MetaData.MetaTags` is saved
 on the same DataStore key together with `Profile.Data`.
 
-!!! notice
-    You can use `Profile.MetaData.MetaTagsLatest` for product purchase confirmation (By storing `receiptInfo.PurchaseId` values inside `Profile.MetaData.MetaTags` and waiting for them to appear in `Profile.MetaData.MetaTagsLatest`). Don't forget to clear really old `PurchaseId`'s to stay under DataStore limits.
-
 ### Profile.GlobalUpdates
 ```lua
 Profile.GlobalUpdates [GlobalUpdates]
@@ -201,6 +198,7 @@ Returns `true` while the profile is session-locked and saving of changes to `Pro
 Profile:GetMetaTag(tag_name) --> value
 -- tag_name   [string]
 ```
+Equivalent of `Profile.MetaData.MetaTags[tag_name]`. See [Profile:SetMetaTag()](#profilesetmetatag) for more info.
 ### Profile:ListenToRelease()
 ```lua
 Profile:ListenToRelease(listener) --> [ScriptConnection] ()
@@ -229,13 +227,20 @@ Profile:SetMetaTag(tag_name, value)
 -- tag_name   [string]
 -- value      -- Any value supported by DataStore
 ```
+Equivalent of `Profile.MetaData.MetaTags[tag_name] = value`. Use for tagging your profile
+with information about itself such as:
+
+- `profile:SetMetaTag("DataVersion", 1)` to let your game code know whether `Profile.Data` needs to be converted
+after massive changes to the game.
+- Anything set through `profile:SetMetaTag(tag_name, value)` will be available through `Profile.MetaData.MetaTagsLatest[tag_name]` after an auto-save or a `:Save()` call - `rofile.MetaData.MetaTagsLatest` is a version
+of `Profile.MetaData.MetaTags` that has been successfully saved to the DataStore.
 
 !!! warning
     Calling `Profile:SetMetaTag()` when the `Profile` is released will throw an error.
     You can check `Profile:IsActive()` before using this method.
 
 !!! notice
-    You may also read / write directly inside `Profile.MetaData.MetaTags`
+    You can use `Profile.MetaData.MetaTagsLatest` for product purchase confirmation (By storing `receiptInfo.PurchaseId` values inside `Profile.MetaData.MetaTags` and waiting for them to appear in `Profile.MetaData.MetaTagsLatest`). Don't forget to clear really old `PurchaseId`'s to stay under DataStore limits.
 
 ### Profile:Save()
 ```lua
