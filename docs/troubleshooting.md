@@ -29,7 +29,7 @@ Try sending fewer requests. Key = XXXXXX"_
 
 **Is this really bad?**
 
-If you're only getting one or two warnings every 30 seconds or less, most likely not. If you're receiving 10+ warnings like that per minute, you might be using [Profile:Save()](/api/#profilesave) not the way it was intended to be used (See the [API](/api/#profilesave) to learn more). Calling [Profile:Save()](/api/#profilesave) several times in succession with periods less than 5 seconds between the calls will guarantee warnings like this. If you're getting 5+ warnings every minute (based on the nature of your game), you should consider not using [Profile:Save()](/api/#profilesave) at all.
+If you're only getting one or two warnings every 30 seconds or less, most likely not. If you're receiving 10+ warnings like that per minute, you might be using [Profile:Save()](/ProfileService/api/#profilesave) not the way it was intended to be used (See the [API](/ProfileService/api/#profilesave) to learn more). Calling [Profile:Save()](/ProfileService/api/#profilesave) several times in succession with periods less than 5 seconds between the calls will guarantee warnings like this. If you're getting 5+ warnings every minute (based on the nature of your game), you should consider not using [Profile:Save()](/ProfileService/api/#profilesave) at all.
 
 **What does this warning mean?**
 
