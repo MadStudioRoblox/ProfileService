@@ -20,3 +20,25 @@ This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/a
 !!! warning
     Failure to prevent these data types may result in silent data loss, silent errors, lots of fatal errors and general failure to save data.
 
+## DataStore warnings caused by ProfileService
+
+![DataStore warning example screenshot](images/DataStoreWarning.png)
+
+_"DataStore request was added to queue. If request queue fills, further requests will be dropped.
+Try sending fewer requests. Key = XXXXXX"_
+
+**Is this really bad?**
+
+If you're only getting one or two warnings every 30 seconds or less, most likely not. If you're receiving 10+ warnings like that per minute, you might be using [Profile:Save()](/api/#profilesave) not the way it was intended to be used (See the [API](/api/#profilesave) to learn more). Calling [Profile:Save()](/api/#profilesave) several times in succession with periods less than 5 seconds between the calls will guarantee warnings like this. If you're getting 5+ warnings every minute (based on the nature of your game), you should consider not using [Profile:Save()](/api/#profilesave) at all.
+
+**What does this warning mean?**
+
+In the particular case of ProfileService, such warnings will be thrown when two successive [UpdateAsync](https://developer.roblox.com/en-us/api-reference/function/GlobalDataStore/UpdateAsync) calls happen too close to each other (around less than 5 seconds between each).
+
+As of writing this guide (July 2020), based on a [DevForum thread](https://devforum.roblox.com/t/details-on-datastoreservice-for-advanced-developers/175804), Rapid successive UpdateAsync calls will be throttled by the DataStoreService and added to a queue:
+
+> **Throttling queues**
+>
+> Every actual budget type (GetAsync, SetIncrementAsync, GetSortedAsync, OnUpdateAsync, SetIncrementSortedAsync) has its own throttling queue. Each of these five throttling queues has a queue size of **30 throttled requests max**. Throttled requests are added to the queue of the corresponding budget type that it consumes.
+
+Based on this information, and my [personal testing](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.lua), your data is not immediately at risk when you're only receiving 1 - 2 warnings per minute. These warnings only notify you that anything that has been requested to be saved to the DataStore will be saved after a longer delay.
