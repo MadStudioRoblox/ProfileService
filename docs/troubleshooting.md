@@ -18,7 +18,7 @@ for unserializable data types for efficiency reasons. Consequently, you must be 
 This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/articles/Datastore-Errors) which ProfileService is based on.
 
 !!! warning
-    Failure to prevent these data types may result in silent data loss, silent errors, lots of fatal errors and general failure to save data.
+    Failure to prevent these data types may result in silent data loss, silent errors, fatal errors and overall failure to save data.
 
 ## DataStore warnings caused by ProfileService
 
