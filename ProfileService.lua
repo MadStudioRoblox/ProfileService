@@ -184,6 +184,8 @@ local ProfileService = {
 						_release_listeners = {listener, ...} / nil, -- [table / nil]
 						
 						_view_mode = true / nil, -- [bool / nil]
+						
+						_load_timestamp = tick(),
 					},
 					...
 				},
@@ -1195,6 +1197,8 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 						_profile_key = profile_key,
 						
 						_release_listeners = {},
+						
+						_load_timestamp = tick(),
 					}
 					setmetatable(profile, Profile)
 					global_updates_object._profile = profile
@@ -1352,6 +1356,8 @@ function ProfileStore:ViewProfileAsync(profile_key) --> [Profile / nil]
 				_profile_key = profile_key,
 				
 				_view_mode = true,
+				
+				_load_timestamp = tick(),
 			}
 			setmetatable(profile, Profile)
 			global_updates_object._profile = profile
@@ -1413,9 +1419,27 @@ RunService.Heartbeat:Connect(function()
 	local auto_save_list_length = #AutoSaveList
 	if auto_save_list_length > 0 then
 		local auto_save_index_speed = SETTINGS.AutoSaveProfiles / auto_save_list_length
-		while tick() - LastAutoSave > auto_save_index_speed do
+		local current_tick = tick()
+		while current_tick - LastAutoSave > auto_save_index_speed do
 			LastAutoSave = LastAutoSave + auto_save_index_speed
 			local profile = AutoSaveList[AutoSaveIndex]
+			if current_tick - profile._load_timestamp < SETTINGS.AutoSaveProfiles then
+				-- This profile is freshly loaded - auto-saving immediately after loading will cause a warning in the log:
+				profile = nil
+				for i = 1, auto_save_list_length - 1 do
+					-- Move auto save index to the right:
+					AutoSaveIndex = AutoSaveIndex + 1
+					if AutoSaveIndex > auto_save_list_length then
+						AutoSaveIndex = 1
+					end
+					profile = AutoSaveList[AutoSaveIndex]
+					if current_tick - profile._load_timestamp >= SETTINGS.AutoSaveProfiles then
+						break
+					else
+						profile = nil
+					end
+				end
+			end
 			-- Move auto save index to the right:
 			AutoSaveIndex = AutoSaveIndex + 1
 			if AutoSaveIndex > auto_save_list_length then
@@ -1423,7 +1447,9 @@ RunService.Heartbeat:Connect(function()
 			end
 			-- Perform save call:
 			-- print("[ProfileService]: Auto updating profile - profile_store_name = \"" .. profile._profile_store._profile_store_name .. "\"; profile_key = \"" .. profile._profile_key .. "\"")
-			coroutine.wrap(SaveProfileAsync)(profile) -- Auto save profile in new thread
+			if profile ~= nil then
+				coroutine.wrap(SaveProfileAsync)(profile) -- Auto save profile in new thread
+			end
 		end
 	end
 	-- 2) Issue queue: --
