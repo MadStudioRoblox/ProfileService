@@ -186,7 +186,7 @@ on the same DataStore key together with `Profile.Data`.
 Profile.GlobalUpdates [GlobalUpdates]
 ```
 
-This is the `GlobalUpdates` object tied to this specific `Profile`. It exposes `GlobalUpdates` methods for update processing.
+This is the `GlobalUpdates` object tied to this specific `Profile`. It exposes `GlobalUpdates` methods for update processing. (See [Global Updates](#global-updates) for more info)
 
 ### Profile:IsActive()
 ```lua
