@@ -30,6 +30,7 @@ The benefits of using ProfileService for your game's profiles are:
 ***It's open source:***
 [Roblox library](https://www.roblox.com/library/5331689994/ProfileService)
 
-**Watch while you eat pizza on the couch:**  
-**[ProfileService tutorial playlist on YouTube](https://www.youtube.com/playlist?list=PLUUm0OvGDjJ8_e8co48ngMJC4XwCaUIIH)** by okeanskiy  
-(Will add new tutorials as they come)  
+**Watch while you eat pizza on the couch - YouTube tutorials:**  
+**[ProfileService tutorial playlist](https://www.youtube.com/playlist?list=PLUUm0OvGDjJ8_e8co48ngMJC4XwCaUIIH)** by @okeanskiy  
+**[Session-locking explained and savable leaderstats](https://youtu.be/P5NuM0gPmew)** by @EncodedLua  
+(Will add new tutorials as they come)
