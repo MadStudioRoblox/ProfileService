@@ -1508,7 +1508,7 @@ game:BindToClose(function()
 		end
 	end
 	-- 2) Yield until all active profile jobs are finished: --
-	while on_close_save_job_count > 0 and ActiveProfileLoadJobs > 0 and ActiveProfileSaveJobs > 0 do
+	while on_close_save_job_count > 0 or ActiveProfileLoadJobs > 0 or ActiveProfileSaveJobs > 0 do
 		RunService.Heartbeat:Wait()
 	end
 	return -- We're done!
