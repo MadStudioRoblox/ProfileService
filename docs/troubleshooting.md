@@ -1,3 +1,5 @@
+> Whether you're still writing your game code or already ran into a problem while using ProfileService, this page is a valuable resource for avoiding several crucial mistakes.
+
 ## Problems in Roblox studio testing
 
 ProfileService data saves will not persist between your Roblox studio testing sessions. In testing mode ProfileService will store and load all your profiles to and from a mock-up "DataStore" table which will disappear after you finish your testing session. The only way to know if your data saving works is through playing your game online on the Roblox servers.
@@ -19,6 +21,91 @@ This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/a
 
 !!! warning
     Failure to prevent these data types may result in silent data loss, silent errors, fatal errors and overall failure to save data.
+
+## Profiles take over 10 seconds to load
+
+**MAKE SURE YOUR [ProfileService](/ProfileService/tutorial/settingup/) MODULE IS UP TO DATE**
+
+Just to be clear, ProfileService **is not** a module that trades in speed for security - if implemented properly, your profiles must usually load within 1 to 2 seconds - that's how long a single [DataStore UpdateAsync](https://developer.roblox.com/en-us/api-reference/function/GlobalDataStore/UpdateAsync) call will take.
+
+**The problem**
+
+More often than not, [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) is taking a clearly longer than usual amount of time to load, usually 10 seconds or much more.
+
+```lua
+local start_time = tick()
+ProfileStore:LoadProfileAsync(profile_key, "ForceLoad")
+print(tick() - start_time) --> A value over 10 seconds
+```
+
+**The culprit**
+
+ - *Is your code __really__ releasing your profiles after it's done working with them?*
+ - *Are you releasing your profiles __immediately__ after the player leaves the game?*
+
+Functions connected to [Players.PlayerRemoving](https://developer.roblox.com/en-us/api-reference/event/Players/PlayerRemoving)
+can be tricky to notice errors for because, when testing alone, you will be leaving the game before the errors appear on the
+[developer console](https://developer.roblox.com/en-us/articles/Developer-Console).
+
+If a player hops to another server (*Server 2*) before the previous one (*Server 1*) releases (removes session-lock from) the player's `Profile`,
+*Server 2* will wait until *Server 1* releases the `Profile`. ProfileService checks the session-lock state of profiles every 10 seconds during a [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) call and this will immediately slow down `Profile` loading very noticably. This is what we would call a **race condition**.
+
+**Mistake example #1:**
+```lua
+Players.PlayerRemoving:Connect(function(player)
+    local profile = Profiles[player]
+    if profile ~= nil then
+        progile:Release() -- "progile" IS A TYPO!
+    end
+end)
+```
+This example would throw an error, though you would need to be inside the server while another player triggers the `.PlayerRemoving` event.
+
+**Mistake example #2:**
+```lua
+Players.PlayerRemoving:Connect(function(player)
+    local profile = Profiles[player]
+    if profile ~= nil then
+        SaveData(profile) -- Are you sure this function doesn't error?
+        profile:Release()
+    end
+end)
+```
+When you're pretty sure you didn't make any typos, the next thing you should check is that nothing can error inside the function connected to `.PlayerRemoving`.  
+> Disclaimer: I don't advise modifying `Profile.Data` after the player leaves - it's a bad practice in securing your data. You should always store data in a way where unexpectedly losing access to writing to `Profile.Data` (e.g. server crash) would not cause massive data loss.
+
+**Mistake example #3:**
+```lua
+Players.PlayerRemoving:Connect(function(player)
+    local profile = Profiles[player]
+    if profile ~= nil then
+        wait(1) -- Or any function with "Wait", "Async" or "Yield" in its name
+        profile:Release()
+    end
+end)
+```
+You should **immediately** release your profiles after the player leaves (`wait(1)` is bad in this example), otherwise you risk creating a race condition where another server that the player joined is trying to load a `Profile` that hasn't been released yet.
+
+**How to be sure my profiles are being released?**  
+
+Add a `print()`:
+```lua
+Players.PlayerRemoving:Connect(function(player)
+    local profile = Profiles[player]
+    if profile ~= nil then
+        profile:Release()
+        print(player.Name .. "'s profile has been released!")
+    end
+end)
+```
+If you're having long `Profile` loading issues, this is the first thing you should do. Check the developer console for the print and any other possible errors.
+
+When [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) finishes loading in\.\.\.
+
+ - less than 2 seconds - ***You're good!***
+ - 10 to 30 seconds - ***Most likely a player server hop race condition (Mistake example #3)***
+ - Over 60 seconds - ***The previous server is not releasing the profile (Mistake examples #1 and #2)***
+
 
 ## DataStore warnings caused by ProfileService
 
@@ -42,3 +129,11 @@ As of writing this guide (July 2020), based on a [DevForum thread](https://devfo
 > Every actual budget type (GetAsync, SetIncrementAsync, GetSortedAsync, OnUpdateAsync, SetIncrementSortedAsync) has its own throttling queue. Each of these five throttling queues has a queue size of **30 throttled requests max**. Throttled requests are added to the queue of the corresponding budget type that it consumes.
 
 Based on this information, and my [personal testing](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.lua), your data is not immediately at risk when you're only receiving 1 - 2 warnings per minute. These warnings only notify you that anything that has been requested to be saved to the DataStore will be saved after a longer delay.
+
+**When will you get warnings**
+
+Again, getting one or two warnings per minute is not going to negatively affect your game in any way. Here are a few scenarios where you're likely to receive a warning:
+
+ - Calling [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) right after loading a profile on the same server or very close to it's auto-save step (every 30 seconds). [:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) works for profiles loaded on the same server, but it's intended for use with remote or not loaded profiles.
+ - Rapidly loading and releasing the same `Profile`.
+ - Releasing the `Profile` as soon as it is loaded.
