@@ -201,8 +201,8 @@ Profile:GetMetaTag(tag_name) --> value
 Equivalent of `Profile.MetaData.MetaTags[tag_name]`. See [Profile:SetMetaTag()](#profilesetmetatag) for more info.
 ### Profile:ListenToRelease()
 ```lua
-Profile:ListenToRelease(listener) --> [ScriptConnection] ()
--- listener   [function]()
+Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
+-- listener   [function](place_id / nil, game_job_id / nil)
 ```
 Listener functions subscribed to `Profile:ListenToRelease()` will be called when
 the profile is released remotely (Being `"ForceLoad"`'ed on a remote server) or
@@ -232,7 +232,7 @@ with information about itself such as:
 
 - `profile:SetMetaTag("DataVersion", 1)` to let your game code know whether `Profile.Data` needs to be converted
 after massive changes to the game.
-- Anything set through `profile:SetMetaTag(tag_name, value)` will be available through `Profile.MetaData.MetaTagsLatest[tag_name]` after an auto-save or a `:Save()` call - `rofile.MetaData.MetaTagsLatest` is a version
+- Anything set through `profile:SetMetaTag(tag_name, value)` will be available through `Profile.MetaData.MetaTagsLatest[tag_name]` after an auto-save or a `:Save()` call - `Profile.MetaData.MetaTagsLatest` is a version
 of `Profile.MetaData.MetaTags` that has been successfully saved to the DataStore.
 
 !!! warning
