@@ -91,7 +91,7 @@
 			
 		Profile:GetMetaTag(tag_name) --> value
 		
-		Profile:ListenToRelease(listener) --> [ScriptConnection] () -- WARNING: Profiles can be released externally if another session
+		Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil) -- WARNING: Profiles can be released externally if another session
 			force-loads this profile - use :ListenToRelease() to handle player leaving cleanup.
 			
 		Profile:Release() -- Call after the session has finished working with this profile
@@ -512,8 +512,15 @@ local function ReleaseProfileInternally(profile)
 	-- Clear auto update reference:
 	RemoveProfileFromAutoSave(profile)
 	-- 2) Trigger release listeners: --
+	local place_id
+	local game_job_id
+	local active_session = profile.MetaData.ActiveSession
+	if active_session ~= nil then
+		place_id = active_session[1]
+		game_job_id = active_session[2]
+	end
 	for _, listener in ipairs(profile._release_listeners) do
-		listener()
+		listener(place_id, game_job_id)
 	end
 	profile._release_listeners = {}
 end
@@ -996,7 +1003,7 @@ function Profile:SetMetaTag(tag_name, value)
 	self.MetaData.MetaTags[tag_name] = value
 end
 
-function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id, game_job_id)
+function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
 	if type(listener) ~= "function" then
 		error("[ProfileService]: Only a function can be set as listener in Profile:ListenToRelease()")
 	end
@@ -1327,7 +1334,6 @@ function ProfileStore:ViewProfileAsync(profile_key) --> [Profile / nil]
 		-- error("[ProfileService]: Can't view Profile when the game is shutting down")
 	end
 	
-	local force_load = false
 	while ProfileService.ServiceLocked == false do
 		-- Load profile:
 		local loaded_data = StandardProfileUpdateAsyncDataStore(
