@@ -2,7 +2,10 @@
 
 ## Problems in Roblox studio testing
 
-ProfileService data saves will not persist between your Roblox studio testing sessions. In testing mode ProfileService will store and load all your profiles to and from a mock-up "DataStore" table which will disappear after you finish your testing session. The only way to know if your data saving works is through playing your game online on the Roblox servers.
+By default, data saved with ProfileService in Roblox Studio will not persist. This can be changed by [enabling studio access to API services](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio).
+
+!!! warning
+    When studio access to API services is enabled, ProfileService will write to live DataStore keys of the game you're editing and you might accidentally make unwanted changes to your game's saved data. For more info, check the [official documentation](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio).
 
 ## Saving data which Roblox cannot serialize
 

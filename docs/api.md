@@ -65,7 +65,12 @@ ProfileStore:LoadProfileAsync(
   not_released_handler
 ) --> [Profile] or nil
 -- profile_key            [string] -- DataStore key
--- not_released_handler   "ForceLoad" or [function](place_id, game_job_id)
+-- not_released_handler:
+--    "ForceLoad"
+--    or
+--    "Steal"
+--    or
+--    [function](place_id, game_job_id)
 ```
 For basic usage, pass `"ForceLoad"` for the `not_released_handler` argument.
 
@@ -79,7 +84,7 @@ local profile = ProfileStore:LoadProfileAsync(
     --   this profile currently locked. In rare cases, if the server
     --   crashes, the profile will stay locked until ForceLoaded by
     --   a new session.
-    return "Repeat" or "Cancel" or "ForceLoad"
+    return "Repeat" or "Cancel" or "ForceLoad" or "Steal"
   end
 )
 ```
@@ -92,6 +97,7 @@ may call the release handler again
 If the profile is session-locked by a remote Roblox server, it will either be released
 for that remote server or "stolen" (Stealing is nescessary for remote servers that are not
 responding in time and for handling crashed server session-locks).
+- `return "Steal"` - The profile will usually be loaded immediately, ignoring an existing remote session lock and applying a session lock for this session. `"Steal"` can be used to clear dead session locks faster than `"ForceLoad"` assuming your code knows that the session lock is dead.
 
 !!! warning
     `:LoadProfileAsync()` can return `nil` when another remote Roblox server attempts to load the profile at the same time.
