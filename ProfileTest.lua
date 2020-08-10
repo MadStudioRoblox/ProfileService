@@ -47,7 +47,7 @@ local GameProfileStore1 = ProfileService.GetProfileStore(RandomProfileStoreKey1,
 local GameProfileStore2 = ProfileService.GetProfileStore(RandomProfileStoreKey2, SETTINGS.ProfileTemplate2)
 
 local IsStudio = RunService:IsStudio()
-local FakeDataStore -- For studio testing
+local MockDataStore -- For studio testing
 
 ----- Utils -----
 
@@ -103,10 +103,10 @@ end
 ----- Private functions -----
 
 local function FakeUpdateAsync(profile_store_name, key, transform_function)
-	local profile_store = FakeDataStore[profile_store_name]
+	local profile_store = MockDataStore[profile_store_name]
 	if profile_store == nil then
 		profile_store = {}
-		FakeDataStore[profile_store_name] = profile_store
+		MockDataStore[profile_store_name] = profile_store
 	end
 	local transform = transform_function(profile_store[key])
 	if transform == nil then
@@ -129,10 +129,10 @@ end
 ----- Initialize -----
 
 if IsStudio == true then
-	FakeDataStore = _G.FakeDataStore
-	if FakeDataStore == nil then
-		FakeDataStore = {}
-		_G.FakeDataStore = FakeDataStore
+	MockDataStore = _G.MockDataStore
+	if MockDataStore == nil then
+		MockDataStore = {}
+		_G.MockDataStore = MockDataStore
 	end
 end
 
