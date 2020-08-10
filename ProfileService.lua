@@ -1425,7 +1425,7 @@ if IsStudio == true then
 		-- This will error if current instance has no Studio API access:
 		DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
 	end)
-	if status == false and string.find(message, "403", 1, true) ~= nil then
+	if status == false and (string.find(message, "403", 1, true) ~= nil or string.find(message, "must publish", 1, true) ~= nil) then
 		UseMockDataStore = true
 		print("[ProfileService]: Using mock DataStore - saved data will not persist")
 	else
