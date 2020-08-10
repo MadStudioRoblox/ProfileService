@@ -54,13 +54,17 @@
 			profile_key            [string] -- DataStore key
 			not_released_handler = "ForceLoad" -- Force loads profile on first call
 			OR
+			not_released_handler = "Steal" -- Steals the profile ignoring it's session lock
+			OR
 			not_released_handler   [function] (place_id, game_job_id) --> [string] ("Repeat" / "Cancel" / "ForceLoad")
 				-- "not_released_handler" will be triggered in cases where the profile is not released by a session. This
 				function may yield for as long as desirable and must return one of three string values:
 					["Repeat"] - ProfileService will repeat the profile loading proccess and may trigger the release handler again
 					["Cancel"] - ProfileStore:LoadProfileAsync() will immediately return nil
-					["ForceLoad"] - ProfileService will repeat the profile loading call while trying to make the owner game server
-						release the profile. It will "steal" the profile ownership if the server doesn't release the profile in time.
+					["ForceLoad"] - ProfileService will repeat the profile loading call, but will return Profile object afterwards
+						and release the profile for another session that has loaded the profile
+					["Steal"] - The profile will usually be loaded immediately, ignoring an existing remote session lock and applying
+						a session lock for this session.
 						
 		* Parameter description for "ProfileStore:GlobalUpdateProfileAsync()":
 		
@@ -265,7 +269,8 @@ local ActiveProfileSaveJobs = 0 -- Number of active threads that are saving prof
 local CriticalStateStart = 0 -- tick()
 
 local IsStudio = RunService:IsStudio()
-local FakeDataStore -- For studio testing
+local UseMockDataStore = false
+local MockDataStore -- For studio testing
 
 ----- Utils -----
 
@@ -357,10 +362,10 @@ local function RegisterCorruption(profile_store_name, profile_key) -- Called whe
 end
 
 local function FakeUpdateAsync(profile_store_name, key, transform_function)
-	local profile_store = FakeDataStore[profile_store_name]
+	local profile_store = MockDataStore[profile_store_name]
 	if profile_store == nil then
 		profile_store = {}
-		FakeDataStore[profile_store_name] = profile_store
+		MockDataStore[profile_store_name] = profile_store
 	end
 	local transform = transform_function(profile_store[key])
 	if transform == nil then
@@ -446,7 +451,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 			
 			return latest_data
 		end
-		if IsStudio == true then -- Dummy empty DataStore when running game in studio mode
+		if UseMockDataStore == true then
 			wait() -- Simulate API call yield
 			loaded_data = FakeUpdateAsync(profile_store._profile_store_name, profile_key, transform_function)
 		else
@@ -1071,7 +1076,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 	elseif string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
-	if type(not_released_handler) ~= "function" and not_released_handler ~= "ForceLoad" then
+	if type(not_released_handler) ~= "function" and not_released_handler ~= "ForceLoad" and not_released_handler ~= "Steal" then
 		error("[ProfileService]: Invalid not_released_handler")
 	end
 	
@@ -1093,10 +1098,11 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 	end
 	
 	ActiveProfileLoadJobs = ActiveProfileLoadJobs + 1
-	local force_load = false or (not_released_handler == "ForceLoad")
+	local force_load = not_released_handler == "ForceLoad"
 	local force_load_steps = 0
 	local request_force_load = force_load -- First step of ForceLoad
 	local steal_session = false -- Second step of ForceLoad
+	local aggressive_steal = not_released_handler == "Steal" -- Developer invoked steal
 	while ProfileService.ServiceLocked == false do
 		-- Load profile:
 		-- SPECIAL CASE - If LoadProfileAsync is called for the same key before another LoadProfileAsync finishes,
@@ -1134,12 +1140,12 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 								latest_data.MetaData.ForceLoadSession = nil
 							elseif type(active_session) == "table" then
 								if IsThisSession(active_session) == false then
-									if steal_session == true then
+									if steal_session == true or aggressive_steal == true then
 										local force_load_uninterrupted = false
 										if force_load_session ~= nil then
 											force_load_uninterrupted = IsThisSession(force_load_session)
 										end
-										if force_load_uninterrupted == true then
+										if force_load_uninterrupted == true or aggressive_steal == true then
 											latest_data.MetaData.ActiveSession = {PlaceId, JobId}
 											latest_data.MetaData.ForceLoadSession = nil
 										end
@@ -1246,6 +1252,8 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 							return nil
 						end
 						request_force_load = false -- Only request a force load once
+					elseif aggressive_steal == true then
+						wait(SETTINGS.LoadProfileRepeatDelay) -- It's unlikely this will ever run
 					else
 						local handler_result = not_released_handler(active_session[1], active_session[2])
 						if handler_result == "Repeat" then
@@ -1256,6 +1264,9 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler) --> [P
 						elseif handler_result == "ForceLoad" then
 							force_load = true
 							request_force_load = true
+							wait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+						elseif handler_result == "Steal" then
+							aggressive_steal = true
 							wait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
 						else
 							error("[ProfileService]: Invalid return from not_released_handler")
@@ -1396,7 +1407,7 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		_loaded_profiles = {},
 		_profile_load_jobs = {},
 	}
-	if IsStudio == false then
+	if UseMockDataStore == false then
 		profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
 	end
 	setmetatable(profile_store, ProfileStore)
@@ -1410,10 +1421,23 @@ ProfileService.CorruptionSignal = ScriptSignal.NewScriptSignal()
 ProfileService.CriticalStateSignal = ScriptSignal.NewScriptSignal()
 
 if IsStudio == true then
-	FakeDataStore = _G.FakeDataStore
-	if FakeDataStore == nil then
-		FakeDataStore = {}
-		_G.FakeDataStore = FakeDataStore
+	local status, message = pcall(function()
+		-- This will error if current instance has no Studio API access:
+		DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
+	end)
+	if status == false and string.find(message, "403", 1, true) ~= nil then
+		UseMockDataStore = true
+		print("[ProfileService]: Using mock DataStore - saved data will not persist")
+	else
+		print("[ProfileService]: Using Roblox DataStore - data will be saved to game")
+	end
+end
+
+if UseMockDataStore == true then
+	MockDataStore = _G.MockDataStore
+	if MockDataStore == nil then
+		MockDataStore = {}
+		_G.MockDataStore = MockDataStore
 	end
 end
 
@@ -1491,8 +1515,8 @@ end)
 
 -- Release all loaded profiles when the server is shutting down:
 game:BindToClose(function()
-	if IsStudio == true then
-		return -- Ignores OnCloseTasks if game is running inside Roblox Studio
+	if UseMockDataStore == true then
+		return -- Ignores OnCloseTasks if ProfileService is running on MockDataStore
 	end
 	ProfileService.ServiceLocked = true
 	-- 1) Release all active profiles: --
