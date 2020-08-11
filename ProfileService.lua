@@ -473,13 +473,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 end
 
 local function RemoveProfileFromAutoSave(profile)
-	local auto_save_index
-	for i = 1, #AutoSaveList do
-		if profile == AutoSaveList[i] then
-			auto_save_index = i
-			break
-		end
-	end
+	local auto_save_index = table.find(AutoSaveList, profile)
 	if auto_save_index ~= nil then
 		table.remove(AutoSaveList, auto_save_index)
 		if auto_save_index < AutoSaveIndex then
