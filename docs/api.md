@@ -35,7 +35,7 @@ Profile.Data to a non table value
 ProfileService.CriticalStateSignal   [ScriptSignal] (is_critical_state [bool])
 ```
 Analytics endpoint for cases when DataStore is throwing too many errors and it's most
-likely affecting your game really really bad - this could be due to developer errrors
+likely affecting your game really really bad - this could be due to developer errors
 or due to Roblox server problems. Could be used to alert players about data store outages.
 
 ### ProfileService.GetProfileStore()
