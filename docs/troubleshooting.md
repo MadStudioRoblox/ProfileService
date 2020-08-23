@@ -157,6 +157,6 @@ Again, getting one or two warnings per minute is not going to negatively affect 
 
  **Can I completely get rid of all warnings while using ProfileService?**
 
- No - you're going to be stuck with seeing these warnings time to time. ProfileService tries hard to prevent this warning from throwing as much as possible, but there's no practical way to completely avoid these warnings without compromising on save stability. Personally, I think Roblox should handle queue warnings in a different way since these warnings don't always signify real problems with your code.
+ No - you're going to be stuck with seeing these warnings time to time. ProfileService tries hard to prevent DataStore warnings from throwing as much as possible, but there's no practical way to completely avoid these warnings without compromising on save stability. Personally, I think Roblox should handle queue warnings in a different way since these warnings don't always signify real problems with your code.
 
  Other DataStore implementations don't suffer from such warnings because they might not be auto-saving, using session locking or try to do final saves as soon as the player leaves - features that might need to unexpectedly call DataStore methods quickly in succession.
