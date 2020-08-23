@@ -149,6 +149,53 @@ ProfileStore:ViewProfileAsync(profile_key) --> [Profile] or nil
 Writing and saving is not possible for profiles in view mode. `Profile.Data` and `Profile.MetaData` will be `nil`
 if the profile hasn't been created.
 
+### ProfileStore:WipeProfileAsync()
+```lua
+ProfileStore:WipeProfileAsync(profile_key) --> is_wipe_successful [bool]
+-- profile_key   [string] -- DataStore key
+```
+Use `:WipeProfileAsync()` to erase user data when complying with right of erasure requests. In live Roblox servers `:WipeProfileAsync()` must be used on profiles created through `ProfileStore.Mock` after `Profile:Release()` and it's known that the `Profile` will no longer be loaded again.
+
+### ProfileStore.Mock
+```lua
+local ProfileTemplate = {}
+local GameProfileStore = ProfileService.GetProfileStore(
+  "PlayerData",
+  ProfileTemplate
+)
+
+local LiveProfile = GameProfileStore:LoadProfileAsync(
+  "profile_key",
+  "ForceLoad"
+)
+local MockProfile = GameProfileStore.Mock:LoadProfileAsync(
+  "profile_key",
+  "ForceLoad"
+)
+print(LiveProfile ~= MockProfile) --> true
+
+-- When done using mock profile on live servers: (Prevent memory leak)
+MockProfile:Release()
+GameProfileStore.Mock:WipeProfile("profile_key")
+-- You don't really have to wipe mock profiles in studio testing
+```
+
+`ProfileStore.Mock` is a reflection of methods available in the `ProfileStore` object with the exception of profile operations
+being performed
+on profiles stored on a separate, detached "fake" DataStore that will be forgotten when the game session ends. You may load profiles
+of the same key from `ProfileStore` and `ProfileStore.Mock` in parallel - these will be two different profiles because the regular and mock versions of the same `ProfileStore` are completely isolated from each other.
+
+`ProfileStore.Mock` is useful for customizing your testing environment in cases when you want to enable Roblox API access in studio, but don't want ProfileService to save to live keys:
+```lua
+local RunService = game:GetService("RunService")
+local GameProfileStore = ProfileService.GetProfileStore("PlayerData", ProfileTemplate)
+if RunService:IsStudio() == true then
+  GameProfileStore = GameProfileStore.Mock
+end
+```
+It's possible to create a project that utilizes both live and mock profiles on live servers!
+
+(But don't do it, lol)
 ## Profile
 
 ### Profile.Data
