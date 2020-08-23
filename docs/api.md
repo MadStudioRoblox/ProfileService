@@ -99,6 +99,9 @@ for that remote server or "stolen" (Stealing is nescessary for remote servers th
 responding in time and for handling crashed server session-locks).
 - `return "Steal"` - The profile will usually be loaded immediately, ignoring an existing remote session lock and applying a session lock for this session. `"Steal"` can be used to clear dead session locks faster than `"ForceLoad"` assuming your code knows that the session lock is dead.
 
+!!! notice
+    ProfileService saves profiles to live DataStore keys in Roblox Studio when [Roblox API services are enabled](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio). See [ProfileStore.Mock](#profilestoremock) if saving to live keys during testing is not desired.
+
 !!! warning
     `:LoadProfileAsync()` can return `nil` when another remote Roblox server attempts to load the profile at the same time.
     This case should be extremely rare and it would be recommended to [:Kick()](https://developer.roblox.com/en-us/api-reference/function/Player/Kick) the player if `:LoadProfileAsync()` does
@@ -185,7 +188,7 @@ being performed
 on profiles stored on a separate, detached "fake" DataStore that will be forgotten when the game session ends. You may load profiles
 of the same key from `ProfileStore` and `ProfileStore.Mock` in parallel - these will be two different profiles because the regular and mock versions of the same `ProfileStore` are completely isolated from each other.
 
-`ProfileStore.Mock` is useful for customizing your testing environment in cases when you want to enable Roblox API access in studio, but don't want ProfileService to save to live keys:
+`ProfileStore.Mock` is useful for customizing your testing environment in cases when you want to [enable Roblox API services](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio) in studio, but don't want ProfileService to save to live keys:
 ```lua
 local RunService = game:GetService("RunService")
 local GameProfileStore = ProfileService.GetProfileStore("PlayerData", ProfileTemplate)
