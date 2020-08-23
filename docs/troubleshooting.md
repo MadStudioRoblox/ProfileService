@@ -154,3 +154,9 @@ Again, getting one or two warnings per minute is not going to negatively affect 
  - Calling [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) right after loading a profile on the same server or very close to it's auto-save step (every 30 seconds). [:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) works for profiles loaded on the same server, but it's intended for use with remote or not loaded profiles.
  - Rapidly loading and releasing the same `Profile`.
  - Releasing the `Profile` as soon as it is loaded.
+
+ **Can I completely get rid of all warnings while using ProfileService?**
+
+ No - you're going to be stuck with seeing these warnings time to time. ProfileService tries hard to prevent this warning from throwing as much as possible, but there's no practical way to completely avoid these warnings without compromising on save stability. Personally, I think Roblox should handle queue warnings in a different way since these warnings don't always signify real problems with your code.
+
+ Other DataStore implementations don't suffer from such warnings because they might not be auto-saving, using session locking or try to do final saves as soon as the player leaves - features that might need to unexpectedly call DataStore methods quickly in succession.
