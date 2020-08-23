@@ -32,6 +32,7 @@ This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/a
         can take up to 15 seconds to load. If implemented correctly, ProfileService will load profiles as fast as the Roblox API allows
         it when the player joins a server without a server hop. It's recommended to release profiles right before universe teleports
         to speed up session lock releasing and further preventing time penalties related to server hopping as much as possible.
+        If your profiles load slower than 1 to 2 seconds on a constant basis, continue reading this topic.
 
 **MAKE SURE YOUR [ProfileService](/ProfileService/tutorial/settingup/) MODULE IS UP TO DATE**
 
