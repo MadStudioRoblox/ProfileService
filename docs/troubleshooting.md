@@ -5,7 +5,8 @@
 By default, data saved with ProfileService in Roblox Studio will not persist. This can be changed by [enabling studio access to API services](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio).
 
 !!! warning
-    When studio access to API services is enabled, ProfileService will write to live DataStore keys of the game you're editing and you might accidentally make unwanted changes to your game's saved data. For more info, check the [official documentation](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio).
+    When studio access to API services is enabled, ProfileService will write to live DataStore keys of the game you're editing
+    (unless [ProfileStore.Mock](/ProfileService/api/#profilestoremock) is used) and you might accidentally make unwanted changes to your game's saved data. For more info, check the [official documentation](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio).
 
 ## Saving data which Roblox cannot serialize
 
