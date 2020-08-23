@@ -117,6 +117,12 @@ When [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprof
 _"DataStore request was added to queue. If request queue fills, further requests will be dropped.
 Try sending fewer requests. Key = XXXXXX"_
 
+!!! notice
+        Currently such DataStore warnings may sometimes occur after calling `Profile:Release()` - A warning will be thrown when
+        an auto-save occurs moments before `Profile:Release()` is called. It's desired that `Profile:Release()` saves the
+        profile as fast as the Roblox API can allow it, so there's currently no known way to prevent this warning practically.
+        This is not a threat to your data - read the rest of this topic to learn more.
+
 **Is this really bad?**
 
 If you're only getting one or two warnings every 30 seconds or less, most likely not. If you're receiving 10+ warnings like that per minute, you might be using [Profile:Save()](/ProfileService/api/#profilesave) not the way it was intended to be used (See the [API](/ProfileService/api/#profilesave) to learn more). Calling [Profile:Save()](/ProfileService/api/#profilesave) several times in succession with periods less than 5 seconds between the calls will guarantee warnings like this. If you're getting 5+ warnings every minute (based on the nature of your game), you should consider not using [Profile:Save()](/ProfileService/api/#profilesave) at all.
