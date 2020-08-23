@@ -26,7 +26,7 @@ local SETTINGS = {
 ----- Service Table -----
 
 local ProfileTest = {
-	
+	TEST_MOCK = false, -- When set to true, tests ProfileStore.Mock functionality
 }
 
 ----- Loaded Services & Modules -----
@@ -35,7 +35,6 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local ProfileService = require(ServerScriptService.ProfileService)
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
 
 ----- Private Variables -----
@@ -46,8 +45,7 @@ local RandomProfileStoreKey2 = "Test_" .. tostring(HttpService:GenerateGUID())
 local GameProfileStore1 = ProfileService.GetProfileStore(RandomProfileStoreKey1, SETTINGS.ProfileTemplate1)
 local GameProfileStore2 = ProfileService.GetProfileStore(RandomProfileStoreKey2, SETTINGS.ProfileTemplate2)
 
-local IsStudio = RunService:IsStudio()
-local MockDataStore -- For studio testing
+local MockDataStore = ProfileService._mock_data_store -- For studio testing
 
 ----- Utils -----
 
@@ -102,11 +100,11 @@ end
 
 ----- Private functions -----
 
-local function FakeUpdateAsync(profile_store_name, key, transform_function)
-	local profile_store = MockDataStore[profile_store_name]
+local function MockUpdateAsync(mock_data_store, profile_store_name, key, transform_function)
+	local profile_store = mock_data_store[profile_store_name]
 	if profile_store == nil then
 		profile_store = {}
-		MockDataStore[profile_store_name] = profile_store
+		mock_data_store[profile_store_name] = profile_store
 	end
 	local transform = transform_function(profile_store[key])
 	if transform == nil then
@@ -118,8 +116,8 @@ local function FakeUpdateAsync(profile_store_name, key, transform_function)
 end
 
 local function TestUpdateAsync(profile_store_name, key, transform_function)
-	if IsStudio == true then
-		FakeUpdateAsync(profile_store_name, key, transform_function)
+	if ProfileService._use_mock_data_store == true or ProfileTest.TEST_MOCK == true then
+		MockUpdateAsync(MockDataStore, profile_store_name, key, transform_function)
 	else
 		local data_store = DataStoreService:GetDataStore(profile_store_name)
 		data_store:UpdateAsync(key, transform_function)
@@ -128,12 +126,13 @@ end
 
 ----- Initialize -----
 
-if IsStudio == true then
-	MockDataStore = _G.MockDataStore
-	if MockDataStore == nil then
-		MockDataStore = {}
-		_G.MockDataStore = MockDataStore
-	end
+local GameProfileStore1_live
+if ProfileTest.TEST_MOCK == true then
+	MockDataStore = ProfileService._user_mock_data_store
+	GameProfileStore1_live = GameProfileStore1
+	GameProfileStore1 = GameProfileStore1.Mock
+	GameProfileStore2 = GameProfileStore2.Mock
+	print("[MOCK]")
 end
 
 coroutine.wrap(function()
@@ -154,6 +153,16 @@ coroutine.wrap(function()
 		6) Test load yoinks
 	--]]
 	
+	-- Test MOCK: --
+	if ProfileTest.TEST_MOCK == true then
+		local success_mock = pcall(function()
+			local profile_live = GameProfileStore1:LoadProfileAsync("ProfileMock", "ForceLoad")
+			wait(2)
+			local profile_mock = GameProfileStore1_live:LoadProfileAsync("ProfileMock", "ForceLoad")
+		end)
+		TestPass("ProfileService mock test", success_mock == true)
+	end
+	
 	-- Test #1: --
 	for i = 1, 2 do
 		local profile1 = GameProfileStore1:LoadProfileAsync("Profile1", "ForceLoad")
@@ -161,7 +170,10 @@ coroutine.wrap(function()
 		profile1:Release()
 	end
 	local profile1 = GameProfileStore1:ViewProfileAsync("Profile1")
-	TestPass("ProfileService test #1", profile1.Data.Counter == 2)
+	TestPass("ProfileService test #1 - part1", profile1.Data.Counter == 2)
+	GameProfileStore1:WipeProfileAsync("Profile1")
+	profile1 = GameProfileStore1:ViewProfileAsync("Profile1")
+	TestPass("ProfileService test #1 - part2", profile1.Data == nil)
 	
 	-- Test #2: --
 	local profile2 = GameProfileStore1:LoadProfileAsync("Profile2", "ForceLoad")
@@ -266,6 +278,7 @@ coroutine.wrap(function()
 	
 	local success5_1 = pcall(function()
 		load1 = GameProfileStore1:LoadProfileAsync("Profile5", "ForceLoad")
+		wait(2)
 		load2 = GameProfileStore1:LoadProfileAsync("Profile5", "ForceLoad")
 	end)
 	TestPass("ProfileService test #5 - part 1", success5_1 == false)
