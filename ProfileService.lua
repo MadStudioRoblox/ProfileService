@@ -60,6 +60,9 @@
 			Notice #2: Profile object members will be nil (Profile.Data = nil, Profile.MetaData = nil) if the profile hasn't
 			been created, with the exception of Profile.GlobalUpdates which could be empty or populated by
 			ProfileStore:GlobalUpdateProfileAsync()
+			
+		ProfileStore:WipeProfileAsync(profile_key) --> is_wipe_successful [bool] -- Completely wipes out profile data from the
+			DataStore / mock DataStore with no way to recover it.
 		
 		* Parameter description for "ProfileStore:LoadProfileAsync()":
 		
