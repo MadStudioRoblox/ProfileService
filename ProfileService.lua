@@ -267,7 +267,7 @@ local ProfileService = {
 				_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
 				
 				_loaded_profiles = {
-					[profile_id] = {
+					[profile_key] = {
 						Data = {}, -- [table] -- Loaded once after ProfileStore:LoadProfileAsync() finishes
 						MetaData = {}, -- [table] -- Updated with every auto-save
 						GlobalUpdates = {, -- [GlobalUpdates]
@@ -283,7 +283,6 @@ local ProfileService = {
 							_update_handler_mode = true / nil, -- [bool / nil]
 						}
 						
-						_id = 1 / nil, -- [number / nil]
 						_profile_store = ProfileStore, -- [ProfileStore]
 						_profile_key = "", -- [string]
 						
@@ -297,10 +296,10 @@ local ProfileService = {
 					},
 					...
 				},
-				_profile_load_jobs = {["profile_key"] = {load_id, loaded_data}, ...},
+				_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
 				
-				_mock_loaded_profiles = {[profile_id] = Profile, ...},
-				_mock_profile_load_jobs = {["profile_key"] = {load_id, loaded_data}, ...},
+				_mock_loaded_profiles = {[profile_key] = Profile, ...},
+				_mock_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
 			},
 			...
 		--]]
@@ -373,7 +372,6 @@ local JobId = game.JobId
 local AutoSaveIndex = 1 -- Next profile to auto save
 local LastAutoSave = tick()
 
-local ProfileIndex = 0
 local LoadIndex = 0
 
 local ActiveProfileLoadJobs = 0 -- Number of active threads that are loading in profiles
@@ -592,7 +590,7 @@ local function ReleaseProfileInternally(profile)
 	-- Clear reference in ProfileStore:
 	local profile_store = profile._profile_store
 	local loaded_profiles = profile._is_user_mock == true and profile_store._mock_loaded_profiles or profile_store._loaded_profiles
-	loaded_profiles[profile._id] = nil
+	loaded_profiles[profile._profile_key] = nil
 	if next(profile_store._loaded_profiles) == nil and next(profile_store._mock_loaded_profiles) == nil then -- ProfileStore has turned inactive
 		local index = table.find(ActiveProfileStores, profile_store)
 		if index ~= nil then
@@ -1055,7 +1053,6 @@ local Profile = {
 		MetaData = {}, -- [table] -- Updated with every auto-save
 		GlobalUpdates = GlobalUpdates, -- [GlobalUpdates]
 		
-		_id = 1 / nil, -- [number / nil]
 		_profile_store = ProfileStore, -- [ProfileStore]
 		_profile_key = "", -- [string]
 		
@@ -1072,7 +1069,7 @@ Profile.__index = Profile
 
 function Profile:IsActive() --> [bool]
 	local loaded_profiles = self._is_user_mock == true and self._profile_store._mock_loaded_profiles or self._profile_store._loaded_profiles
-	return loaded_profiles[self._id] == self
+	return loaded_profiles[self._profile_key] == self
 end
 
 function Profile:GetMetaTag(tag_name) --> value
@@ -1158,11 +1155,11 @@ local ProfileStore = {
 		_profile_template = {} / nil, -- [table / nil]
 		_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
 		
-		_loaded_profiles = {[profile_id] = Profile, ...},
-		_profile_load_jobs = {["profile_key"] = {load_id, loaded_data}, ...},
+		_loaded_profiles = {[profile_key] = Profile, ...},
+		_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
 		
-		_mock_loaded_profiles = {[profile_id] = Profile, ...},
-		_mock_profile_load_jobs = {["profile_key"] = {load_id, loaded_data}, ...},
+		_mock_loaded_profiles = {[profile_key] = Profile, ...},
+		_mock_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
 	--]]
 }
 ProfileStore.__index = ProfileStore
@@ -1190,11 +1187,9 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 	for _, profile_store in ipairs(ActiveProfileStores) do
 		if profile_store._profile_store_name == self._profile_store_name then
 			local loaded_profiles = is_user_mock == true and profile_store._mock_loaded_profiles or profile_store._loaded_profiles
-			for _, loaded_profile in pairs(loaded_profiles) do
-				if profile_key == loaded_profile._profile_key then
-					error("[ProfileService]: Profile of ProfileStore \"" .. self._profile_store_name .. "\" with key \"" .. profile_key .. "\" is already loaded in this session")
-					-- Are you using Profile:Release() properly?
-				end
+			if loaded_profiles[profile_key] ~= nil then
+				error("[ProfileService]: Profile of ProfileStore \"" .. self._profile_store_name .. "\" with key \"" .. profile_key .. "\" is already loaded in this session")
+				-- Are you using Profile:Release() properly?
 			end
 		end
 	end
@@ -1293,7 +1288,6 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 					loaded_data.MetaData.MetaTagsLatest = DeepCopyTable(loaded_data.MetaData.MetaTags)
 					-- Case #1: Profile is now taken by this session:
 					-- Create Profile object:
-					ProfileIndex = ProfileIndex + 1
 					local global_updates_object = {
 						_updates_latest = loaded_data.GlobalUpdates,
 						_pending_update_lock = {},
@@ -1310,7 +1304,6 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						MetaData = loaded_data.MetaData,
 						GlobalUpdates = global_updates_object,
 						
-						_id = ProfileIndex,
 						_profile_store = self,
 						_profile_key = profile_key,
 						
@@ -1327,9 +1320,9 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						table.insert(ActiveProfileStores, self)
 					end
 					if is_user_mock == true then
-						self._mock_loaded_profiles[ProfileIndex] = profile
+						self._mock_loaded_profiles[profile_key] = profile
 					else
-						self._loaded_profiles[ProfileIndex] = profile
+						self._loaded_profiles[profile_key] = profile
 					end
 					-- Adding profile to AutoSaveList;
 					AddProfileToAutoSave(profile)
@@ -1481,7 +1474,6 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 				MetaData = loaded_data.MetaData,
 				GlobalUpdates = global_updates_object,
 				
-				_id = nil,
 				_profile_store = self,
 				_profile_key = profile_key,
 				
