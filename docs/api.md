@@ -193,9 +193,13 @@ if RunService:IsStudio() == true then
   GameProfileStore = GameProfileStore.Mock
 end
 ```
-It's possible to create a project that utilizes both live and mock profiles on live servers!
+A few more things:
 
-(But don't do it, lol)
+-  Even when Roblox API services are disabled, `ProfileStore` and `ProfileStore.Mock` will store profiles in separate stores.
+-  It's better to think of as `ProfileStore` and `ProfileStore.Mock` as two different `ProfileStore` objects unrelated to each
+other in any way.
+-  It's possible to create a project that utilizes both live and mock profiles on live servers!
+
 ## Profile
 
 ### Profile.Data
