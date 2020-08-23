@@ -196,7 +196,7 @@ end
 A few more things:
 
 -  Even when Roblox API services are disabled, `ProfileStore` and `ProfileStore.Mock` will store profiles in separate stores.
--  It's better to think of as `ProfileStore` and `ProfileStore.Mock` as two different `ProfileStore` objects unrelated to each
+-  It's better to think of `ProfileStore` and `ProfileStore.Mock` as two different `ProfileStore` objects unrelated to each
 other in any way.
 -  It's possible to create a project that utilizes both live and mock profiles on live servers!
 
