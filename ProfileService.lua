@@ -149,6 +149,7 @@ local SETTINGS = {
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
 	LoadProfileRepeatDelay = 15, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 4, -- Steps taken before ForceLoad request steals the active session for a profile
+	AssumeDeadSessionLock = 20 * 60, -- (seconds) If a profile hasn't been updated for 20 minutes, assume the session lock is dead
 	
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
@@ -334,6 +335,7 @@ local ProfileService = {
 			ActiveSession = {place_id, game_job_id} / nil,
 			ForceLoadSession = {place_id, game_job_id} / nil,
 			MetaTags = {},
+			LastUpdate = 0, -- os.time()
 		},
 		GlobalUpdates = {
 			update_index,
@@ -704,9 +706,14 @@ local function SaveProfileAsync(profile, release_from_session)
 			EditProfile = function(latest_data)
 				-- 1) Check if this session still owns the profile: --
 				local active_session = latest_data.MetaData.ActiveSession
+				local force_load_session = latest_data.MetaData.ForceLoadSession
 				local session_owns_profile = false
+				local force_load_pending = false
 				if type(active_session) == "table" then
 					session_owns_profile = IsThisSession(active_session)
+				end
+				if type(force_load_session) == "table" then
+					force_load_pending = not IsThisSession(force_load_session)
 				end
 				
 				if session_owns_profile == true then -- We may only edit the profile if this session has ownership of the profile
@@ -738,7 +745,8 @@ local function SaveProfileAsync(profile, release_from_session)
 					-- 3) Save profile data: --
 					latest_data.Data = profile.Data
 					latest_data.MetaData.MetaTags = profile.MetaData.MetaTags -- MetaData.MetaTags is the only actively savable component of MetaData
-					if release_from_session == true then
+					latest_data.MetaData.LastUpdate = os.time()
+					if release_from_session == true or force_load_pending == true then
 						latest_data.MetaData.ActiveSession = nil
 					end
 				end
@@ -762,23 +770,14 @@ local function SaveProfileAsync(profile, release_from_session)
 		local active_session = loaded_data.MetaData.ActiveSession
 		local force_load_session = loaded_data.MetaData.ForceLoadSession
 		local session_owns_profile = false
-		local force_load_pending = false
 		if type(active_session) == "table" then
 			session_owns_profile = IsThisSession(active_session)
-		end
-		if type(force_load_session) == "table" then
-			force_load_pending = not IsThisSession(force_load_session)
 		end
 		local is_active = profile:IsActive()
 		if session_owns_profile == true then
 			-- 6) Check for new global updates: --
 			if is_active == true then -- Profile could've been released before the saving thread finished
-				if force_load_pending == false then
-					CheckForNewGlobalUpdates(profile, old_global_updates_data, new_global_updates_data)
-				else
-					-- Another game session is force loading this profile:
-					SaveProfileAsync(profile, true) -- Call save function in a new thread with release_from_session = true
-				end
+				CheckForNewGlobalUpdates(profile, old_global_updates_data, new_global_updates_data)
 			end
 		else
 			-- Session no longer owns the profile:
@@ -1238,6 +1237,14 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 								latest_data.MetaData.ForceLoadSession = nil
 							elseif type(active_session) == "table" then
 								if IsThisSession(active_session) == false then
+									local last_update = latest_data.MetaData.LastUpdate
+									if last_update ~= nil then
+										if os.time() - last_update > SETTINGS.AssumeDeadSessionLock then
+											latest_data.MetaData.ActiveSession = {PlaceId, JobId}
+											latest_data.MetaData.ForceLoadSession = nil
+											return
+										end
+									end
 									if steal_session == true or aggressive_steal == true then
 										local force_load_uninterrupted = false
 										if force_load_session ~= nil then
@@ -1264,10 +1271,17 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 							ActiveSession = {PlaceId, JobId},
 							ForceLoadSession = nil,
 							MetaTags = {},
+							
 						}
 					end,
 					EditProfile = function(latest_data)
-						latest_data.MetaData.SessionLoadCount = latest_data.MetaData.SessionLoadCount + 1
+						if ProfileService.ServiceLocked == false then
+							local active_session = latest_data.MetaData.ActiveSession
+							if active_session ~= nil and IsThisSession(active_session) == true then
+								latest_data.MetaData.SessionLoadCount = latest_data.MetaData.SessionLoadCount + 1
+								latest_data.MetaData.LastUpdate = os.time()
+							end
+						end
 					end,
 				},
 				is_user_mock
