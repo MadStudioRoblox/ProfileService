@@ -149,8 +149,8 @@ local SETTINGS = {
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
 	LoadProfileRepeatDelay = 15, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 4, -- Steps taken before ForceLoad request steals the active session for a profile
-	AssumeDeadSessionLockMultiplier = 2, -- X = (this * (ForceLoadMaxSteps + 1) * LoadProfileRepeatDelay)
-		-- If a profile hasn't been updated for X amount of seconds, assume the session lock is dead.
+	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
+		-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
 	
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
@@ -388,8 +388,6 @@ local MockDataStore = ProfileService._mock_data_store -- Mock data store used wh
 
 local UserMockDataStore = ProfileService._user_mock_data_store -- Separate mock data store accessed via ProfileStore.Mock
 local UseMockTag = {}
-
-local deriv_AssumeDeadSessionLock = SETTINGS.AssumeDeadSessionLockMultiplier * (SETTINGS.ForceLoadMaxSteps + 1) * SETTINGS.LoadProfileRepeatDelay
 
 ----- Utils -----
 
@@ -1242,7 +1240,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 								if IsThisSession(active_session) == false then
 									local last_update = latest_data.MetaData.LastUpdate
 									if last_update ~= nil then
-										if os.time() - last_update > deriv_AssumeDeadSessionLock then
+										if os.time() - last_update > SETTINGS.AssumeDeadSessionLock then
 											latest_data.MetaData.ActiveSession = {PlaceId, JobId}
 											latest_data.MetaData.ForceLoadSession = nil
 											return
