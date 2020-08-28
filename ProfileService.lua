@@ -1575,19 +1575,21 @@ end
 
 ----- Initialize -----
 
-if IsStudio == true then
-	local status, message = pcall(function()
-		-- This will error if current instance has no Studio API access:
-		DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
-	end)
-	if status == false and (string.find(message, "403", 1, true) ~= nil or string.find(message, "must publish", 1, true) ~= nil) then
-		UseMockDataStore = true
-		ProfileService._use_mock_data_store = true
-		print("[ProfileService]: Roblox API services unavailable - data will not be saved")
-	else
-		print("[ProfileService]: Roblox API services available - data will be saved")
+coroutine.wrap(function()
+	if IsStudio == true then
+		local status, message = pcall(function()
+			-- This will error if current instance has no Studio API access:
+			DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
+		end)
+		if status == false and (string.find(message, "403", 1, true) ~= nil or string.find(message, "must publish", 1, true) ~= nil) then
+			UseMockDataStore = true
+			ProfileService._use_mock_data_store = true
+			print("[ProfileService]: Roblox API services unavailable - data will not be saved")
+		else
+			print("[ProfileService]: Roblox API services available - data will be saved")
+		end
 	end
-end
+end)()
 
 ----- Connections -----
 
