@@ -155,7 +155,8 @@ local SETTINGS = {
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
 	CriticalStateLast = 120, -- Seconds
-	
+	MaxRequestRetries = 3, -- Number of DataStore API request retries before failing
+
 }
 
 local Madwork -- Standalone Madwork reference for portable version of ProfileService
@@ -403,6 +404,27 @@ local function DeepCopyTable(t)
 	return copy
 end
 
+local function InvokeWithRetries(operation, maxRetryCount)
+	local tries = 0
+	local success = true
+	local errMsg = nil
+	local data = nil
+
+	repeat
+		tries = tries + 1
+		success,errMsg = pcall(function() data = operation() end)
+		if not success then
+			wait(1)
+		end
+	until tries == maxRetryCount or success
+
+	if not success then
+		warn("InvokeWithRetries exhausted all attempts!")
+	end
+
+	return data, success, errMsg
+end
+
 ----- Private functions -----
 
 local function RegisterIssue(error_message) -- Called when a DataStore API call errors
@@ -521,7 +543,9 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 				loaded_data = MockUpdateAsync(MockDataStore, profile_store._profile_store_name, profile_key, transform_function)
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			else
-				loaded_data = profile_store._global_data_store:UpdateAsync(profile_key, transform_function)
+				loaded_data = InvokeWithRetries(function()
+					return profile_store._global_data_store:UpdateAsync(profile_key, transform_function)
+				end, SETTINGS.MaxRequestRetries)
 			end
 		else
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
