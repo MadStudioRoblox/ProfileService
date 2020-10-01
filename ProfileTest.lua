@@ -10,7 +10,7 @@
 --]]
 
 local SETTINGS = {
-
+	
 	ProfileTemplate1 = {
 		Counter = 0,
 		Array = {},
@@ -140,8 +140,8 @@ coroutine.wrap(function()
 	print("RUNNING PROFILE TEST")
 	
 	-- NOTICE: Will finish much faster in studio than in Roblox servers - DataStore limits the frequency
-		-- of UpdateAsync calls and will throw nasty warnings, but it should all work the same... Just much
-		-- slower.
+	-- of UpdateAsync calls and will throw nasty warnings, but it should all work the same... Just much
+	-- slower.
 	
 	--[[
 	What to test:
@@ -376,7 +376,7 @@ coroutine.wrap(function()
 			GlobalUpdates = {0, {}},
 		}
 	end)
-
+	
 	-- Test #10: --
 	print("Test #10 begin... (This will take over a minute)")
 	local not_released_handler_test = false
@@ -402,6 +402,12 @@ coroutine.wrap(function()
 		end
 	end)
 	TestPass("ProfileService test #10", profile10 ~= nil and not_released_handler_test == true)
+	
+	-- Test #11: --
+	local profile11 = GameProfileStore1:LoadProfileAsync("Profile11", "ForceLoad")
+	profile11.Data = {Array = false}
+	profile11:Reconcile()
+	TestPass("ProfileService test #11", profile11.Data.Counter == 0 and profile11.Data.Array == false and type(profile11.Data.Dictionary) == "table")
 	
 end)()
 
