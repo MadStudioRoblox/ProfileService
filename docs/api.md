@@ -51,10 +51,7 @@ ProfileService.GetProfileStore(
 `ProfileStore` objects expose methods for loading / viewing profiles and sending global updates. Equivalent of [:GetDataStore()](https://developer.roblox.com/en-us/api-reference/function/DataStoreService/GetDataStore) in Roblox [DataStoreService](https://developer.roblox.com/en-us/api-reference/class/DataStoreService) API.
 
 !!! notice
-    `profile_template` is only copied for `Profile.Data` for new profiles. Changes made to `profile_template` will
-    not fill in missing components in profiles that have been saved before changing `profile_template`.
-    You may create your own function to fill in the missing components in `Profile.Data` as soon as it is
-    loaded or have `nil` exceptions in your personal `:Get()` and `:Set()` method libraries.
+    By default, `profile_template` is only copied for `Profile.Data` for new profiles. Changes made to `profile_template` can be applied to `Profile.Data` of previously saved profiles by calling [Profile:Reconcile()](#profilereconcile). You can also create your own function to fill in the missing components in `Profile.Data` as soon as it is loaded or have `nil` exceptions in your personal `:Get()` and `:Set()` method libraries.
 
 ## ProfileStore
 ### ProfileStore:LoadProfileAsync()
