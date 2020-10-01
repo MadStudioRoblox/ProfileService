@@ -58,6 +58,7 @@ local function PlayerAdded(player)
 		"ForceLoad"
 	)
 	if profile ~= nil then
+		profile:Reconcile() -- Fill in missing variables from ProfileTemplate (optional)
 		profile:ListenToRelease(function()
 			Profiles[player] = nil
 			-- The profile could've been loaded on another Roblox server:
