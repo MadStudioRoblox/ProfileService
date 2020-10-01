@@ -259,6 +259,31 @@ Profile:GetMetaTag(tag_name) --> value
 -- tag_name   [string]
 ```
 Equivalent of `Profile.MetaData.MetaTags[tag_name]`. See [Profile:SetMetaTag()](#profilesetmetatag) for more info.
+### Profile:Reconcile()
+```lua
+Profile:Reconcile() --> nil
+```
+Fills in missing variables inside `Profile.Data` from `profile_template` table that was provided when calling `ProfileService.GetProfileStore()`. It's often necessary to use `:Reconcile()` if you're applying changes to your
+`profile_template` over the course of your game's development after release.
+
+The following function is used in the reconciliation process:
+```lua
+local function ReconcileTable(target, template)
+	for k, v in pairs(template) do
+		if type(k) == "string" then -- Only string keys will be reconciled
+			if target[k] == nil then
+				if type(v) == "table" then
+					target[k] = DeepCopyTable(v)
+				else
+					target[k] = v
+				end
+			elseif type(target[k]) == "table" and type(v) == "table" then
+				ReconcileTable(target[k], v)
+			end
+		end
+	end
+end
+```
 ### Profile:ListenToRelease()
 ```lua
 Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
