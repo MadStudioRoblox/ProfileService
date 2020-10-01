@@ -492,7 +492,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 						if update_settings.ExistingProfileHandle ~= nil then
 							update_settings.ExistingProfileHandle(latest_data)
 						end
-					-- Case #2: Profile was not loaded but GlobalUpdate data exists
+						-- Case #2: Profile was not loaded but GlobalUpdate data exists
 					elseif latest_data.Data == nil and
 						latest_data.MetaData == nil and
 						type(latest_data.GlobalUpdates) == "table" then
@@ -813,6 +813,8 @@ local function SaveProfileAsync(profile, release_from_session)
 					ReleaseProfileInternally(profile)
 				end
 			end
+		elseif repeat_save_flag == true then
+			Madwork.HeartbeatWait() -- Prevent infinite loop in case DataStore API does not yield
 		end
 	end
 	ActiveProfileSaveJobs = ActiveProfileSaveJobs - 1
@@ -1617,9 +1619,9 @@ if IsStudio == true then
 	end
 	if status == false and
 		(string.find(message, "403", 1, true) ~= nil or -- Cannot write to DataStore from studio if API access is not enabled
-		string.find(message, "must publish", 1, true) ~= nil or -- Game must be published to access live keys
-		no_internet_access == true) then -- No internet access
-	
+			string.find(message, "must publish", 1, true) ~= nil or -- Game must be published to access live keys
+			no_internet_access == true) then -- No internet access
+		
 		UseMockDataStore = true
 		ProfileService._use_mock_data_store = true
 		print("[ProfileService]: Roblox API services unavailable - data will not be saved")
