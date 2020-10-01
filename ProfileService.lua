@@ -13,9 +13,7 @@
 		https://devforum.roblox.com/t/ProfileService/667805
 	
 	WARNINGS FOR "Profile.Data" VALUES:
-		More information on https://madstudioroblox.github.io/ProfileService/troubleshooting/
-		! Do not store NaN values
-	 	! Do not create array tables with non-sequential indexes - attempting to replicate such tables will result in an error;
+	 	! Do not create numeric tables with gaps - attempting to replicate such tables will result in an error;
 		! Do not create mixed tables (some values indexed by number and others by string key), as only
 		     the data indexed by number will be replicated.
 		! Do not index tables by anything other than numbers and strings.
@@ -38,13 +36,13 @@
 	Functions:
 	
 		ProfileService.GetProfileStore(profile_store_name, profile_template) --> [ProfileStore]
+			-- WARNING: Only one ProfileStore can exist for a given profile_store_name in a game session!
 		
 		* Parameter description for "ProfileService.GetProfileStore()":
 		
 			profile_store_name   [string] -- DataStore name
 			profile_template     []:
 				{}                        [table] -- Profiles will default to given table (hard-copy) when no data was saved previously
-				nil                       [nil] -- ProfileStore:LoadProfileAsync() method will be locked
 				
 	Members [ProfileStore]:
 	
@@ -110,6 +108,8 @@
 			
 		Profile:GetMetaTag(tag_name) --> value
 		
+		Profile:Reconcile() -- Fills in missing (nil) [string_key] = [value] pairs to the Profile.Data structure
+		
 		Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil) -- WARNING: Profiles can be released externally if another session
 			force-loads this profile - use :ListenToRelease() to handle player leaving cleanup.
 			
@@ -126,18 +126,18 @@
 		
 	Methods [GlobalUpdates]:
 	
-	-- ALWAYS AVAILABLE:
+	-- ALWAYS PUBLIC:
 		GlobalUpdates:GetActiveUpdates() --> [table] {{update_id, update_data}, ...}
 		GlobalUpdates:GetLockedUpdates() --> [table] {{update_id, update_data}, ...}
 		
-	-- ONLY ACCESSIBLE THROUGH "Profile.GlobalUpdates":
+	-- ONLY WHEN FROM "Profile.GlobalUpdates":
 		GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
 		GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
 		-- WARNING: GlobalUpdates:LockUpdate() and GlobalUpdates:ClearLockedUpdate() will error after profile expires
 		GlobalUpdates:LockActiveUpdate(update_id)
 		GlobalUpdates:ClearLockedUpdate(update_id)
 		
-	-- AVAILABLE INSIDE "update_handler" DURING A ProfileStore:GlobalUpdateProfileAsync() CALL
+	-- EXPOSED TO "update_handler" DURING ProfileStore:GlobalUpdateProfileAsync() CALL
 		GlobalUpdates:AddActiveUpdate(update_data)
 		GlobalUpdates:ChangeActiveUpdate(update_id, update_data)
 		GlobalUpdates:ClearActiveUpdate(update_id)
@@ -145,12 +145,12 @@
 --]]
 
 local SETTINGS = {
-
+	
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
 	LoadProfileRepeatDelay = 15, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 4, -- Steps taken before ForceLoad request steals the active session for a profile
 	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
-		-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
+	-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
 	
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
@@ -248,19 +248,19 @@ end
 ----- Service Table -----
 
 local ProfileService = {
-
+	
 	ServiceLocked = false, -- Set to true once the server is shutting down
 	
 	IssueSignal = Madwork.NewScriptSignal(), -- (error_message) -- Fired when a DataStore API call throws an error
 	CorruptionSignal = Madwork.NewScriptSignal(), -- (profile_store_name, profile_key) -- Fired when DataStore key returns a value that has
-		-- all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a noon table value
+	-- all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a noon table value
 	
 	CriticalState = false, -- Set to true while DataStore service is throwing too many errors
 	CriticalStateSignal = Madwork.NewScriptSignal(), -- (is_critical_state) -- Fired when CriticalState is set to true
-		-- (You may alert players with this, or set up analytics)
+	-- (You may alert players with this, or set up analytics)
 	
 	ServiceIssueCount = 0,
-
+	
 	_active_profile_stores = {
 		--[[
 			{
@@ -292,7 +292,7 @@ local ProfileService = {
 						
 						_view_mode = true / nil, -- [bool / nil]
 						
-						_load_timestamp = tick(),
+						_load_timestamp = os.clock(),
 						
 						_is_user_mock = false, -- ProfileStore.Mock
 					},
@@ -314,8 +314,8 @@ local ProfileService = {
 		--]]
 	},
 	
-	_issue_queue = {}, -- [table] {issue_tick, ...}
-	_critical_state_start = 0, -- [number] 0 = no critical state / tick() = critical state start
+	_issue_queue = {}, -- [table] {issue_time, ...}
+	_critical_state_start = 0, -- [number] 0 = no critical state / os.clock() = critical state start
 	
 	-- Debug:
 	_mock_data_store = {},
@@ -373,14 +373,14 @@ local PlaceId = game.PlaceId
 local JobId = game.JobId
 
 local AutoSaveIndex = 1 -- Next profile to auto save
-local LastAutoSave = tick()
+local LastAutoSave = os.clock()
 
 local LoadIndex = 0
 
 local ActiveProfileLoadJobs = 0 -- Number of active threads that are loading in profiles
 local ActiveProfileSaveJobs = 0 -- Number of active threads that are saving profiles
 
-local CriticalStateStart = 0 -- tick()
+local CriticalStateStart = 0 -- os.clock()
 
 local IsStudio = RunService:IsStudio()
 local UseMockDataStore = false
@@ -403,11 +403,27 @@ local function DeepCopyTable(t)
 	return copy
 end
 
+local function ReconcileTable(target, template)
+	for k, v in pairs(template) do
+		if type(k) == "string" then -- Only string keys will be reconciled
+			if target[k] == nil then
+				if type(v) == "table" then
+					target[k] = DeepCopyTable(v)
+				else
+					target[k] = v
+				end
+			elseif type(target[k]) == "table" and type(v) == "table" then
+				ReconcileTable(target[k], v)
+			end
+		end
+	end
+end
+
 ----- Private functions -----
 
 local function RegisterIssue(error_message) -- Called when a DataStore API call errors
 	warn("[ProfileService]: DataStore API error - \"" .. tostring(error_message) .. "\"")
-	table.insert(IssueQueue, tick()) -- Adding issue time to queue
+	table.insert(IssueQueue, os.clock()) -- Adding issue time to queue
 	ProfileService.IssueSignal:Fire(tostring(error_message))
 end
 
@@ -584,7 +600,7 @@ local function AddProfileToAutoSave(profile) -- Notice: Makes sure this profile 
 		AutoSaveIndex = AutoSaveIndex + 1
 	elseif #AutoSaveList == 1 then
 		-- First profile created - make sure it doesn't get immediately auto saved:
-		LastAutoSave = tick()
+		LastAutoSave = os.clock()
 	end
 end
 
@@ -698,93 +714,104 @@ local function SaveProfileAsync(profile, release_from_session)
 		ReleaseProfileInternally(profile)
 	end
 	ActiveProfileSaveJobs = ActiveProfileSaveJobs + 1
-	local loaded_data = StandardProfileUpdateAsyncDataStore(
-		profile._profile_store,
-		profile._profile_key,
-		{
-			ExistingProfileHandle = nil,
-			MissingProfileHandle = nil,
-			EditProfile = function(latest_data)
-				-- 1) Check if this session still owns the profile: --
-				local active_session = latest_data.MetaData.ActiveSession
-				local force_load_session = latest_data.MetaData.ForceLoadSession
-				local session_owns_profile = false
-				local force_load_pending = false
-				if type(active_session) == "table" then
-					session_owns_profile = IsThisSession(active_session)
-				end
-				if type(force_load_session) == "table" then
-					force_load_pending = not IsThisSession(force_load_session)
-				end
-				
-				if session_owns_profile == true then -- We may only edit the profile if this session has ownership of the profile
-					-- 2) Manage global updates: --
-					local latest_global_updates_data = latest_data.GlobalUpdates -- {update_index, {{update_id, version_id, update_locked, update_data}, ...}}
-					local latest_global_updates_list = latest_global_updates_data[2]
-					
-					local global_updates_object = profile.GlobalUpdates -- [GlobalUpdates]
-					local pending_update_lock = global_updates_object._pending_update_lock -- {update_id, ...}
-					local pending_update_clear = global_updates_object._pending_update_clear -- {update_id, ...}
-					-- Active update locking:
-					for i = 1, #latest_global_updates_list do
-						for _, lock_id in ipairs(pending_update_lock) do
-							if latest_global_updates_list[i][1] == lock_id then
-								latest_global_updates_list[i][3] = true
-								break
-							end
-						end
-					end
-					-- Locked update clearing:
-					for _, clear_id in ipairs(pending_update_clear) do
-						for i = 1, #latest_global_updates_list do
-							if latest_global_updates_list[i][1] == clear_id and latest_global_updates_list[i][3] == true then
-								table.remove(latest_global_updates_list, i)
-								break
-							end
-						end
-					end
-					-- 3) Save profile data: --
-					latest_data.Data = profile.Data
-					latest_data.MetaData.MetaTags = profile.MetaData.MetaTags -- MetaData.MetaTags is the only actively savable component of MetaData
-					latest_data.MetaData.LastUpdate = os.time()
-					if release_from_session == true or force_load_pending == true then
-						latest_data.MetaData.ActiveSession = nil
-					end
-				end
-			end,
-		},
-		profile._is_user_mock
-	)
-	if loaded_data ~= nil then
-		-- 4) Set latest data in profile: --
-		-- Setting global updates:
-		local global_updates_object = profile.GlobalUpdates -- [GlobalUpdates]
-		local old_global_updates_data = global_updates_object._updates_latest
-		local new_global_updates_data = loaded_data.GlobalUpdates
-		global_updates_object._updates_latest = new_global_updates_data
-		-- Setting MetaData:
-		local keep_session_meta_tag_reference = profile.MetaData.MetaTags
-		profile.MetaData = loaded_data.MetaData
-		profile.MetaData.MetaTagsLatest = profile.MetaData.MetaTags
-		profile.MetaData.MetaTags = keep_session_meta_tag_reference
-		-- 5) Check if session still owns the profile: --
-		local active_session = loaded_data.MetaData.ActiveSession
-		local force_load_session = loaded_data.MetaData.ForceLoadSession
-		local session_owns_profile = false
-		if type(active_session) == "table" then
-			session_owns_profile = IsThisSession(active_session)
+	local last_session_load_count = profile.MetaData.SessionLoadCount
+	-- Compare "SessionLoadCount" when writing to profile to prevent a rare case of repeat last save when the profile is loaded on the same server again
+	local repeat_save_flag = true -- Released Profile save calls have to repeat until they succeed
+	while repeat_save_flag == true do
+		if release_from_session ~= true then
+			repeat_save_flag = false
 		end
-		local is_active = profile:IsActive()
-		if session_owns_profile == true then
-			-- 6) Check for new global updates: --
-			if is_active == true then -- Profile could've been released before the saving thread finished
-				CheckForNewGlobalUpdates(profile, old_global_updates_data, new_global_updates_data)
+		local loaded_data = StandardProfileUpdateAsyncDataStore(
+			profile._profile_store,
+			profile._profile_key,
+			{
+				ExistingProfileHandle = nil,
+				MissingProfileHandle = nil,
+				EditProfile = function(latest_data)
+					-- 1) Check if this session still owns the profile: --
+					local active_session = latest_data.MetaData.ActiveSession
+					local force_load_session = latest_data.MetaData.ForceLoadSession
+					local session_load_count = latest_data.MetaData.SessionLoadCount
+					local session_owns_profile = false
+					local force_load_pending = false
+					if type(active_session) == "table" then
+						session_owns_profile = IsThisSession(active_session) and session_load_count == last_session_load_count
+					end
+					if type(force_load_session) == "table" then
+						force_load_pending = not IsThisSession(force_load_session)
+					end
+					
+					if session_owns_profile == true then -- We may only edit the profile if this session has ownership of the profile
+						-- 2) Manage global updates: --
+						local latest_global_updates_data = latest_data.GlobalUpdates -- {update_index, {{update_id, version_id, update_locked, update_data}, ...}}
+						local latest_global_updates_list = latest_global_updates_data[2]
+						
+						local global_updates_object = profile.GlobalUpdates -- [GlobalUpdates]
+						local pending_update_lock = global_updates_object._pending_update_lock -- {update_id, ...}
+						local pending_update_clear = global_updates_object._pending_update_clear -- {update_id, ...}
+						-- Active update locking:
+						for i = 1, #latest_global_updates_list do
+							for _, lock_id in ipairs(pending_update_lock) do
+								if latest_global_updates_list[i][1] == lock_id then
+									latest_global_updates_list[i][3] = true
+									break
+								end
+							end
+						end
+						-- Locked update clearing:
+						for _, clear_id in ipairs(pending_update_clear) do
+							for i = 1, #latest_global_updates_list do
+								if latest_global_updates_list[i][1] == clear_id and latest_global_updates_list[i][3] == true then
+									table.remove(latest_global_updates_list, i)
+									break
+								end
+							end
+						end
+						-- 3) Save profile data: --
+						latest_data.Data = profile.Data
+						latest_data.MetaData.MetaTags = profile.MetaData.MetaTags -- MetaData.MetaTags is the only actively savable component of MetaData
+						latest_data.MetaData.LastUpdate = os.time()
+						if release_from_session == true or force_load_pending == true then
+							latest_data.MetaData.ActiveSession = nil
+						end
+					end
+				end,
+			},
+			profile._is_user_mock
+		)
+		if loaded_data ~= nil then
+			repeat_save_flag = false
+			-- 4) Set latest data in profile: --
+			-- Setting global updates:
+			local global_updates_object = profile.GlobalUpdates -- [GlobalUpdates]
+			local old_global_updates_data = global_updates_object._updates_latest
+			local new_global_updates_data = loaded_data.GlobalUpdates
+			global_updates_object._updates_latest = new_global_updates_data
+			-- Setting MetaData:
+			local keep_session_meta_tag_reference = profile.MetaData.MetaTags
+			profile.MetaData = loaded_data.MetaData
+			profile.MetaData.MetaTagsLatest = profile.MetaData.MetaTags
+			profile.MetaData.MetaTags = keep_session_meta_tag_reference
+			-- 5) Check if session still owns the profile: --
+			local active_session = loaded_data.MetaData.ActiveSession
+			local force_load_session = loaded_data.MetaData.ForceLoadSession
+			local session_load_count = loaded_data.MetaData.SessionLoadCount
+			local session_owns_profile = false
+			if type(active_session) == "table" then
+				session_owns_profile = IsThisSession(active_session) and session_load_count == last_session_load_count
 			end
-		else
-			-- Session no longer owns the profile:
-			-- 7) Release profile if it hasn't been released yet: --
-			if is_active == true then
-				ReleaseProfileInternally(profile)
+			local is_active = profile:IsActive()
+			if session_owns_profile == true then
+				-- 6) Check for new global updates: --
+				if is_active == true then -- Profile could've been released before the saving thread finished
+					CheckForNewGlobalUpdates(profile, old_global_updates_data, new_global_updates_data)
+				end
+			else
+				-- Session no longer owns the profile:
+				-- 7) Release profile if it hasn't been released yet: --
+				if is_active == true then
+					ReleaseProfileInternally(profile)
+				end
 			end
 		end
 	end
@@ -1060,7 +1087,7 @@ local Profile = {
 		
 		_view_mode = true / nil, -- [bool / nil]
 		
-		_load_timestamp = tick(),
+		_load_timestamp = os.clock(),
 		
 		_is_user_mock = false, -- ProfileStore.Mock
 	--]]
@@ -1094,6 +1121,10 @@ function Profile:SetMetaTag(tag_name, value)
 		error("[ProfileService]: PROFILE EXPIRED - Meta tags can't be set")
 	end
 	self.MetaData.MetaTags[tag_name] = value
+end
+
+function Profile:Reconcile()
+	ReconcileTable(self.Data, self._profile_store._profile_template)
 end
 
 function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
@@ -1152,7 +1183,7 @@ local ProfileStore = {
 		Mock = {},
 	
 		_profile_store_name = "", -- [string] -- DataStore name
-		_profile_template = {} / nil, -- [table / nil]
+		_profile_template = {}, -- [table]
 		_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
 		
 		_loaded_profiles = {[profile_key] = Profile, ...},
@@ -1324,7 +1355,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						
 						_release_listeners = {},
 						
-						_load_timestamp = tick(),
+						_load_timestamp = os.clock(),
 						
 						_is_user_mock = is_user_mock,
 					}
@@ -1452,7 +1483,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 	end
 	return nil -- Return nothing (Update unsuccessful)
 end
-		
+
 function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / nil]
 	if type(profile_key) ~= "string" then
 		error("[ProfileService]: Invalid profile_key")
@@ -1494,7 +1525,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 				
 				_view_mode = true,
 				
-				_load_timestamp = tick(),
+				_load_timestamp = os.clock(),
 			}
 			setmetatable(profile, Profile)
 			global_updates_object._profile = profile
@@ -1580,7 +1611,15 @@ if IsStudio == true then
 		-- This will error if current instance has no Studio API access:
 		DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
 	end)
-	if status == false and (string.find(message, "403", 1, true) ~= nil or string.find(message, "must publish", 1, true) ~= nil) then
+	local no_internet_access = status == false and string.find(message, "ConnectFail", 1, true) ~= nil
+	if no_internet_access == true then
+		warn("[ProfileService]: No internet access - check your network connection")
+	end
+	if status == false and
+		(string.find(message, "403", 1, true) ~= nil or -- Cannot write to DataStore from studio if API access is not enabled
+		string.find(message, "must publish", 1, true) ~= nil or -- Game must be published to access live keys
+		no_internet_access == true) then -- No internet access
+	
 		UseMockDataStore = true
 		ProfileService._use_mock_data_store = true
 		print("[ProfileService]: Roblox API services unavailable - data will not be saved")
@@ -1597,11 +1636,11 @@ RunService.Heartbeat:Connect(function()
 	local auto_save_list_length = #AutoSaveList
 	if auto_save_list_length > 0 then
 		local auto_save_index_speed = SETTINGS.AutoSaveProfiles / auto_save_list_length
-		local current_tick = tick()
-		while current_tick - LastAutoSave > auto_save_index_speed do
+		local os_clock = os.clock()
+		while os_clock - LastAutoSave > auto_save_index_speed do
 			LastAutoSave = LastAutoSave + auto_save_index_speed
 			local profile = AutoSaveList[AutoSaveIndex]
-			if current_tick - profile._load_timestamp < SETTINGS.AutoSaveProfiles then
+			if os_clock - profile._load_timestamp < SETTINGS.AutoSaveProfiles then
 				-- This profile is freshly loaded - auto-saving immediately after loading will cause a warning in the log:
 				profile = nil
 				for i = 1, auto_save_list_length - 1 do
@@ -1611,7 +1650,7 @@ RunService.Heartbeat:Connect(function()
 						AutoSaveIndex = 1
 					end
 					profile = AutoSaveList[AutoSaveIndex]
-					if current_tick - profile._load_timestamp >= SETTINGS.AutoSaveProfiles then
+					if os_clock - profile._load_timestamp >= SETTINGS.AutoSaveProfiles then
 						break
 					else
 						profile = nil
@@ -1636,13 +1675,13 @@ RunService.Heartbeat:Connect(function()
 		if #IssueQueue >= SETTINGS.IssueCountForCriticalState then
 			ProfileService.CriticalState = true
 			ProfileService.CriticalStateSignal:Fire(true)
-			CriticalStateStart = tick()
+			CriticalStateStart = os.clock()
 			warn("[ProfileService]: Entered critical state")
 		end
 	else
 		if #IssueQueue >= SETTINGS.IssueCountForCriticalState then
-			CriticalStateStart = tick()
-		elseif tick() - CriticalStateStart > SETTINGS.CriticalStateLast then
+			CriticalStateStart = os.clock()
+		elseif os.clock() - CriticalStateStart > SETTINGS.CriticalStateLast then
 			ProfileService.CriticalState = false
 			ProfileService.CriticalStateSignal:Fire(false)
 			warn("[ProfileService]: Critical state ended")
@@ -1650,10 +1689,10 @@ RunService.Heartbeat:Connect(function()
 	end
 	-- Issue queue:
 	while true do
-		local issue_tick = IssueQueue[1]
-		if issue_tick == nil then
+		local issue_time = IssueQueue[1]
+		if issue_time == nil then
 			break
-		elseif tick() - issue_tick > SETTINGS.IssueLast then
+		elseif os.clock() - issue_time > SETTINGS.IssueLast then
 			table.remove(IssueQueue, 1)
 		else
 			break
