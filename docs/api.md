@@ -176,7 +176,7 @@ print(LiveProfile ~= MockProfile) --> true
 
 -- When done using mock profile on live servers: (Prevent memory leak)
 MockProfile:Release()
-GameProfileStore.Mock:WipeProfile("profile_key")
+GameProfileStore.Mock:WipeProfileAsync("profile_key")
 -- You don't really have to wipe mock profiles in studio testing
 ```
 
