@@ -13,13 +13,18 @@ Set to false when the Roblox server is shutting down.
 `ProfileStore` methods should not be called after this value is set to `false`
 ### ProfileService.IssueSignal
 ```lua
-ProfileService.IssueSignal   [ScriptSignal](error_message [string])
+ProfileService.IssueSignal   [ScriptSignal](error_message [string], profile_store_name [string], profile_key [string])
 ```
 Analytics endpoint for DataStore error logging. Example usage:
 ```lua
-ProfileService.IssueSignal:Connect(function(error_message)
+ProfileService.IssueSignal:Connect(function(error_message, profile_store_name, profile_key)
   pcall(function()
-    AnalyticsService:FireEvent("ProfileServiceIssue", error_message)
+    AnalyticsService:FireEvent(
+      "ProfileServiceIssue",
+      error_message,
+      profile_store_name,
+      profile_key
+    )
   end)
 end)
 ```
