@@ -11,6 +11,12 @@
 			},
 			"ProfileTest": {
 				"$path": "ProfileTest.server.lua"
+			},
+			"PlayerProfileExample": {
+				"$path": "Examples/PlayerProfileExample.server.lua",
+				"$properties": {
+					"Disabled": true
+				}
 			}
 		}
  	}
