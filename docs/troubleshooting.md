@@ -145,7 +145,7 @@ As of writing this guide (July 2020), based on a [DevForum thread](https://devfo
 >
 > Every actual budget type (GetAsync, SetIncrementAsync, GetSortedAsync, OnUpdateAsync, SetIncrementSortedAsync) has its own throttling queue. Each of these five throttling queues has a queue size of **30 throttled requests max**. Throttled requests are added to the queue of the corresponding budget type that it consumes.
 
-Based on this information, and my [personal testing](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.lua), your data is not immediately at risk when you're only receiving 1 - 2 warnings per minute. These warnings only notify you that anything that has been requested to be saved to the DataStore will be saved after a longer delay.
+Based on this information, and my [personal testing](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.server.lua), your data is not immediately at risk when you're only receiving 1 - 2 warnings per minute. These warnings only notify you that anything that has been requested to be saved to the DataStore will be saved after a longer delay.
 
 **When will you get warnings**
 

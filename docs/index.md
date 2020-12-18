@@ -23,7 +23,7 @@ If anything is missing or broken, [file an issue on GitHub](https://github.com/M
 
 If you need help integrating ProfileService into your project, [join the discussion](https://devforum.roblox.com/t/profileservice-a-datastore-module/667805).
 
-> **Disclaimer**: Although ProfileService has been thoroughly tested (Auto testing source included - [ProfileTest.lua](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.lua)), it has not been used within a large scale Roblox project yet. ProfileService is the successor to an earlier DataStore implementation used in [The Mad Murderer 2](https://www.roblox.com/games/1026891626/The-Mad-Murderer-2)
+> **Disclaimer**: Although ProfileService has been thoroughly tested (Auto testing source included - [ProfileTest.lua](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.server.lua)), it has not been used within a large scale Roblox project yet. ProfileService is the successor to an earlier DataStore implementation used in [The Mad Murderer 2](https://www.roblox.com/games/1026891626/The-Mad-Murderer-2)
 
 # Why not DataStore2?
 
