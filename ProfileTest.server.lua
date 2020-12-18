@@ -33,7 +33,18 @@ local ProfileTest = {
 
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local ProfileService = require(ServerScriptService.ProfileService)
+local ProfileService
+do
+	local did_yield = true
+	coroutine.wrap(function()
+		ProfileService = require(ServerScriptService.ProfileService)
+		did_yield = false
+	end)()
+	if did_yield == true then
+		error("[ProfileTest]: ProfileService ModuleScript should not yield when required!")
+	end
+end
+
 local HttpService = game:GetService("HttpService")
 local DataStoreService = game:GetService("DataStoreService")
 
