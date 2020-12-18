@@ -29,7 +29,7 @@
 	
 		ProfileService.ServiceLocked         [bool]
 		
-		ProfileService.IssueSignal           [ScriptSignal](error_message)
+		ProfileService.IssueSignal           [ScriptSignal](error_message, profile_store_name, profile_key)
 		ProfileService.CorruptionSignal      [ScriptSignal](profile_store_name, profile_key)
 		ProfileService.CriticalStateSignal   [ScriptSignal](is_critical_state)
 	
@@ -180,7 +180,7 @@ do
 		end
 	end
 	
-	function ScriptConnection.NewScriptConnection(listener_table, listener) --> [ScriptConnection]
+	function ScriptConnection.NewArrayScriptConnection(listener_table, listener) --> [ScriptConnection]
 		return {
 			_listener = listener,
 			_listener_table = listener_table,
@@ -224,7 +224,7 @@ do
 	
 	Madwork = {
 		NewScriptSignal = ScriptSignal.NewScriptSignal,
-		NewScriptConnection = ScriptConnection.NewScriptConnection,
+		NewArrayScriptConnection = ScriptConnection.NewArrayScriptConnection,
 		HeartbeatWait = function(wait_time) --> time_elapsed
 			if wait_time == nil or wait_time == 0 then
 				return Heartbeat:Wait()
@@ -248,19 +248,19 @@ end
 ----- Service Table -----
 
 local ProfileService = {
-	
+
 	ServiceLocked = false, -- Set to true once the server is shutting down
-	
-	IssueSignal = Madwork.NewScriptSignal(), -- (error_message) -- Fired when a DataStore API call throws an error
+
+	IssueSignal = Madwork.NewScriptSignal(), -- (error_message, profile_store_name, profile_key) -- Fired when a DataStore API call throws an error
 	CorruptionSignal = Madwork.NewScriptSignal(), -- (profile_store_name, profile_key) -- Fired when DataStore key returns a value that has
 	-- all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a noon table value
-	
+
 	CriticalState = false, -- Set to true while DataStore service is throwing too many errors
 	CriticalStateSignal = Madwork.NewScriptSignal(), -- (is_critical_state) -- Fired when CriticalState is set to true
 	-- (You may alert players with this, or set up analytics)
-	
+
 	ServiceIssueCount = 0,
-	
+
 	_active_profile_stores = {
 		--[[
 			{
@@ -306,23 +306,23 @@ local ProfileService = {
 			...
 		--]]
 	},
-	
+
 	_auto_save_list = { -- loaded profile table which will be circularly auto-saved
 		--[[
 			Profile,
 			...
 		--]]
 	},
-	
+
 	_issue_queue = {}, -- [table] {issue_time, ...}
 	_critical_state_start = 0, -- [number] 0 = no critical state / os.clock() = critical state start
-	
+
 	-- Debug:
 	_mock_data_store = {},
 	_user_mock_data_store = {},
-	
+
 	_use_mock_data_store = false,
-	
+
 }
 
 --[[
@@ -383,6 +383,8 @@ local ActiveProfileSaveJobs = 0 -- Number of active threads that are saving prof
 local CriticalStateStart = 0 -- os.clock()
 
 local IsStudio = RunService:IsStudio()
+local IsLiveCheckActive = false
+
 local UseMockDataStore = false
 local MockDataStore = ProfileService._mock_data_store -- Mock data store used when API access is disabled
 
@@ -421,10 +423,16 @@ end
 
 ----- Private functions -----
 
-local function RegisterIssue(error_message) -- Called when a DataStore API call errors
-	warn("[ProfileService]: DataStore API error - \"" .. tostring(error_message) .. "\"")
+local function WaitForLiveAccessCheck() -- This function was created to prevent the ProfileService module yielding execution when required
+	while IsLiveCheckActive == true do
+		Madwork.HeartbeatWait()
+	end
+end
+
+local function RegisterIssue(error_message, profile_store_name, profile_key) -- Called when a DataStore API call errors
+	warn("[ProfileService]: DataStore API error (Store:\"" .. profile_store_name .. "\";Key:\"" .. profile_key .. "\") - \"" .. tostring(error_message) .. "\"")
 	table.insert(IssueQueue, os.clock()) -- Adding issue time to queue
-	ProfileService.IssueSignal:Fire(tostring(error_message))
+	ProfileService.IssueSignal:Fire(tostring(error_message), profile_store_name, profile_key)
 end
 
 local function RegisterCorruption(profile_store_name, profile_key) -- Called when a corrupted profile is loaded
@@ -469,24 +477,24 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 				if latest_data == "PROFILE_WIPED" then
 					latest_data = nil -- Profile was previously wiped - ProfileService will act like it was empty
 				end
-				
+
 				local missing_profile = false
 				local data_corrupted = false
 				local global_updates_data = {0, {}}
-				
+
 				if latest_data == nil then
 					missing_profile = true
 				elseif type(latest_data) ~= "table" then
 					missing_profile = true
 					data_corrupted = true
 				end
-				
+
 				if type(latest_data) == "table" then
 					-- Case #1: Profile was loaded
 					if type(latest_data.Data) == "table" and
 						type(latest_data.MetaData) == "table" and
 						type(latest_data.GlobalUpdates) == "table" then
-						
+
 						latest_data.WasCorrupted = false -- Must be set to false if set previously
 						global_updates_data = latest_data.GlobalUpdates
 						if update_settings.ExistingProfileHandle ~= nil then
@@ -496,7 +504,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 					elseif latest_data.Data == nil and
 						latest_data.MetaData == nil and
 						type(latest_data.GlobalUpdates) == "table" then
-						
+
 						latest_data.WasCorrupted = false -- Must be set to false if set previously
 						global_updates_data = latest_data.GlobalUpdates
 						missing_profile = true
@@ -505,7 +513,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 						data_corrupted = true
 					end
 				end
-				
+
 				-- Case #3: Profile was not created or corrupted and no GlobalUpdate data exists
 				if missing_profile == true then
 					latest_data = {
@@ -517,17 +525,17 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 						update_settings.MissingProfileHandle(latest_data)
 					end
 				end
-				
+
 				-- Editing profile:
 				if update_settings.EditProfile ~= nil then
 					update_settings.EditProfile(latest_data)
 				end
-				
+
 				-- Data corruption handling (Silently override with empty profile) (Also run Case #1)
 				if data_corrupted == true then
 					latest_data.WasCorrupted = true -- Temporary tag that will be removed on first save
 				end
-				
+
 				return latest_data
 			end
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
@@ -574,7 +582,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 		-- Return loaded_data:
 		return loaded_data
 	else
-		RegisterIssue((error_message ~= nil) and error_message or "Undefined error")
+		RegisterIssue((error_message ~= nil) and error_message or "Undefined error", profile_store._profile_store_name, profile_key)
 		-- Return nothing:
 		return nil
 	end
@@ -740,12 +748,12 @@ local function SaveProfileAsync(profile, release_from_session)
 					if type(force_load_session) == "table" then
 						force_load_pending = not IsThisSession(force_load_session)
 					end
-					
+
 					if session_owns_profile == true then -- We may only edit the profile if this session has ownership of the profile
 						-- 2) Manage global updates: --
 						local latest_global_updates_data = latest_data.GlobalUpdates -- {update_index, {{update_id, version_id, update_locked, update_data}, ...}}
 						local latest_global_updates_list = latest_global_updates_data[2]
-						
+
 						local global_updates_object = profile.GlobalUpdates -- [GlobalUpdates]
 						local pending_update_lock = global_updates_object._pending_update_lock -- {update_id, ...}
 						local pending_update_clear = global_updates_object._pending_update_clear -- {update_id, ...}
@@ -900,7 +908,7 @@ function GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection] 
 	end
 	-- Connect listener:
 	table.insert(self._new_active_update_listeners, listener)
-	return Madwork.NewScriptConnection(self._new_active_update_listeners, listener)
+	return Madwork.NewArrayScriptConnection(self._new_active_update_listeners, listener)
 end
 
 function GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
@@ -919,7 +927,7 @@ function GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] 
 	end
 	-- Connect listener:
 	table.insert(self._new_locked_update_listeners, listener)
-	return Madwork.NewScriptConnection(self._new_locked_update_listeners, listener)
+	return Madwork.NewArrayScriptConnection(self._new_locked_update_listeners, listener)
 end
 
 function GlobalUpdates:LockActiveUpdate(update_id)
@@ -1151,7 +1159,7 @@ function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / ni
 		}
 	else
 		table.insert(self._release_listeners, listener)
-		return Madwork.NewScriptConnection(self._release_listeners, listener)
+		return Madwork.NewArrayScriptConnection(self._release_listeners, listener)
 	end
 end
 
@@ -1209,13 +1217,15 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 	if type(not_released_handler) ~= "function" and not_released_handler ~= "ForceLoad" and not_released_handler ~= "Steal" then
 		error("[ProfileService]: Invalid not_released_handler")
 	end
-	
+
 	if ProfileService.ServiceLocked == true then
 		return nil
 	end
-	
+
+	WaitForLiveAccessCheck()
+
 	local is_user_mock = _use_mock == UseMockTag
-	
+
 	-- Check if profile with profile_key isn't already loaded in this session:
 	for _, profile_store in ipairs(ActiveProfileStores) do
 		if profile_store._profile_store_name == self._profile_store_name then
@@ -1226,7 +1236,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 			end
 		end
 	end
-	
+
 	ActiveProfileLoadJobs = ActiveProfileLoadJobs + 1
 	local force_load = not_released_handler == "ForceLoad"
 	local force_load_steps = 0
@@ -1305,7 +1315,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 							ActiveSession = {PlaceId, JobId},
 							ForceLoadSession = nil,
 							MetaTags = {},
-							
+
 						}
 					end,
 					EditProfile = function(latest_data)
@@ -1340,10 +1350,10 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						_updates_latest = loaded_data.GlobalUpdates,
 						_pending_update_lock = {},
 						_pending_update_clear = {},
-						
+
 						_new_active_update_listeners = {},
 						_new_locked_update_listeners = {},
-						
+
 						_profile = nil,
 					}
 					setmetatable(global_updates_object, GlobalUpdates)
@@ -1351,14 +1361,14 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						Data = loaded_data.Data,
 						MetaData = loaded_data.MetaData,
 						GlobalUpdates = global_updates_object,
-						
+
 						_profile_store = self,
 						_profile_key = profile_key,
-						
+
 						_release_listeners = {},
-						
+
 						_load_timestamp = os.clock(),
-						
+
 						_is_user_mock = is_user_mock,
 					}
 					setmetatable(profile, Profile)
@@ -1446,11 +1456,13 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 	if type(update_handler) ~= "function" then
 		error("[ProfileService]: Invalid update_handler")
 	end
-	
+
 	if ProfileService.ServiceLocked == true then
 		return nil
 	end
-	
+
+	WaitForLiveAccessCheck()
+
 	while ProfileService.ServiceLocked == false do
 		-- Updating profile:
 		local loaded_data = StandardProfileUpdateAsyncDataStore(
@@ -1492,11 +1504,13 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 	elseif string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
-	
+
 	if ProfileService.ServiceLocked == true then
 		return nil
 	end
-	
+
+	WaitForLiveAccessCheck()
+
 	while ProfileService.ServiceLocked == false do
 		-- Load profile:
 		local loaded_data = StandardProfileUpdateAsyncDataStore(
@@ -1521,12 +1535,12 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 				Data = loaded_data.Data,
 				MetaData = loaded_data.MetaData,
 				GlobalUpdates = global_updates_object,
-				
+
 				_profile_store = self,
 				_profile_key = profile_key,
-				
+
 				_view_mode = true,
-				
+
 				_load_timestamp = os.clock(),
 			}
 			setmetatable(profile, Profile)
@@ -1546,11 +1560,13 @@ function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_succe
 	elseif string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
-	
+
 	if ProfileService.ServiceLocked == true then
 		return false
 	end
-	
+
+	WaitForLiveAccessCheck()
+
 	return StandardProfileUpdateAsyncDataStore(
 		self,
 		profile_key,
@@ -1569,11 +1585,11 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 	elseif string.len(profile_store_name) == 0 then
 		error("[ProfileService]: Invalid profile_store_name")
 	end
-	
+
 	if type(profile_template) ~= "table" then
 		error("[ProfileService]: Invalid profile_template")
 	end
-	
+
 	local profile_store
 	profile_store = {
 		Mock = {
@@ -1590,7 +1606,7 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 				return profile_store:WipeProfileAsync(profile_key, UseMockTag)
 			end
 		},
-		
+
 		_profile_store_name = profile_store_name,
 		_profile_template = profile_template,
 		_global_data_store = nil,
@@ -1599,8 +1615,17 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		_mock_loaded_profiles = {},
 		_mock_profile_load_jobs = {},
 	}
-	if UseMockDataStore == false then
-		profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+	if IsLiveCheckActive == true then
+		coroutine.wrap(function()
+			WaitForLiveAccessCheck()
+			if UseMockDataStore == false then
+				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+			end
+		end)()
+	else
+		if UseMockDataStore == false then
+			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+		end
 	end
 	setmetatable(profile_store, ProfileStore)
 	return profile_store
@@ -1609,25 +1634,29 @@ end
 ----- Initialize -----
 
 if IsStudio == true then
-	local status, message = pcall(function()
-		-- This will error if current instance has no Studio API access:
-		DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
-	end)
-	local no_internet_access = status == false and string.find(message, "ConnectFail", 1, true) ~= nil
-	if no_internet_access == true then
-		warn("[ProfileService]: No internet access - check your network connection")
-	end
-	if status == false and
-		(string.find(message, "403", 1, true) ~= nil or -- Cannot write to DataStore from studio if API access is not enabled
-			string.find(message, "must publish", 1, true) ~= nil or -- Game must be published to access live keys
-			no_internet_access == true) then -- No internet access
-		
-		UseMockDataStore = true
-		ProfileService._use_mock_data_store = true
-		print("[ProfileService]: Roblox API services unavailable - data will not be saved")
-	else
-		print("[ProfileService]: Roblox API services available - data will be saved")
-	end
+	IsLiveCheckActive = true
+	coroutine.wrap(function()
+		local status, message = pcall(function()
+			-- This will error if current instance has no Studio API access:
+			DataStoreService:GetDataStore("____PS"):SetAsync("____PS", os.time())
+		end)
+		local no_internet_access = status == false and string.find(message, "ConnectFail", 1, true) ~= nil
+		if no_internet_access == true then
+			warn("[ProfileService]: No internet access - check your network connection")
+		end
+		if status == false and
+			(string.find(message, "403", 1, true) ~= nil or -- Cannot write to DataStore from studio if API access is not enabled
+				string.find(message, "must publish", 1, true) ~= nil or -- Game must be published to access live keys
+				no_internet_access == true) then -- No internet access
+
+			UseMockDataStore = true
+			ProfileService._use_mock_data_store = true
+			print("[ProfileService]: Roblox API services unavailable - data will not be saved")
+		else
+			print("[ProfileService]: Roblox API services available - data will be saved")
+		end
+		IsLiveCheckActive = false
+	end)()
 end
 
 ----- Connections -----
@@ -1703,33 +1732,36 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- Release all loaded profiles when the server is shutting down:
-Madwork.ConnectToOnClose(
-	function()
-		ProfileService.ServiceLocked = true
-		-- 1) Release all active profiles: --
-		-- Clone AutoSaveList to a new table because AutoSaveList changes when profiles are released:
-		local on_close_save_job_count = 0
-		local active_profiles = {}
-		for index, profile in ipairs(AutoSaveList) do
-			active_profiles[index] = profile
-		end
-		-- Release the profiles; Releasing profiles can trigger listeners that release other profiles, so check active state:
-		for _, profile in ipairs(active_profiles) do
-			if profile:IsActive() == true then
-				on_close_save_job_count = on_close_save_job_count + 1
-				coroutine.wrap(function() -- Save profile on new thread
-					SaveProfileAsync(profile, true)
-					on_close_save_job_count = on_close_save_job_count - 1
-				end)()
+coroutine.wrap(function()
+	WaitForLiveAccessCheck()
+	Madwork.ConnectToOnClose(
+		function()
+			ProfileService.ServiceLocked = true
+			-- 1) Release all active profiles: --
+			-- Clone AutoSaveList to a new table because AutoSaveList changes when profiles are released:
+			local on_close_save_job_count = 0
+			local active_profiles = {}
+			for index, profile in ipairs(AutoSaveList) do
+				active_profiles[index] = profile
 			end
-		end
-		-- 2) Yield until all active profile jobs are finished: --
-		while on_close_save_job_count > 0 or ActiveProfileLoadJobs > 0 or ActiveProfileSaveJobs > 0 do
-			Madwork.HeartbeatWait()
-		end
-		return -- We're done!
-	end,
-	UseMockDataStore == false -- Always run this OnClose task if using Roblox API services
-)
+			-- Release the profiles; Releasing profiles can trigger listeners that release other profiles, so check active state:
+			for _, profile in ipairs(active_profiles) do
+				if profile:IsActive() == true then
+					on_close_save_job_count = on_close_save_job_count + 1
+					coroutine.wrap(function() -- Save profile on new thread
+						SaveProfileAsync(profile, true)
+						on_close_save_job_count = on_close_save_job_count - 1
+					end)()
+				end
+			end
+			-- 2) Yield until all active profile jobs are finished: --
+			while on_close_save_job_count > 0 or ActiveProfileLoadJobs > 0 or ActiveProfileSaveJobs > 0 do
+				Madwork.HeartbeatWait()
+			end
+			return -- We're done!
+		end,
+		UseMockDataStore == false -- Always run this OnClose task if using Roblox API services
+	)
+end)()
 
 return ProfileService
