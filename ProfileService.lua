@@ -302,6 +302,7 @@ local ProfileService = {
 				
 				_mock_loaded_profiles = {[profile_key] = Profile, ...},
 				_mock_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
+				_is_pending = false, -- Waiting for live access check
 			},
 			...
 		--]]
@@ -429,6 +430,12 @@ local function WaitForLiveAccessCheck() -- This function was created to prevent 
 	end
 end
 
+local function WaitForPendingProfileStore(profile_store)
+	while profile_store._is_pending == true do
+		Madwork.HeartbeatWait()
+	end
+end
+
 local function RegisterIssue(error_message, profile_store_name, profile_key) -- Called when a DataStore API call errors
 	warn("[ProfileService]: DataStore API error (Store:\"" .. profile_store_name .. "\";Key:\"" .. profile_key .. "\") - \"" .. tostring(error_message) .. "\"")
 	table.insert(IssueQueue, os.clock()) -- Adding issue time to queue
@@ -549,16 +556,16 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 			end
 		else
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
-				local profile_store = UserMockDataStore[profile_store._profile_store_name]
-				if profile_store ~= nil then
-					profile_store[profile_key] = nil
+				local mock_data_store = UserMockDataStore[profile_store._profile_store_name]
+				if mock_data_store ~= nil then
+					mock_data_store[profile_key] = nil
 				end
 				wipe_status = true
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			elseif UseMockDataStore == true then -- Used when API access is disabled
-				local profile_store = MockDataStore[profile_store._profile_store_name]
-				if profile_store ~= nil then
-					profile_store[profile_key] = nil
+				local mock_data_store = MockDataStore[profile_store._profile_store_name]
+				if mock_data_store ~= nil then
+					mock_data_store[profile_key] = nil
 				end
 				wipe_status = true
 				Madwork.HeartbeatWait() -- Simulate API call yield
@@ -1222,7 +1229,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 		return nil
 	end
 
-	WaitForLiveAccessCheck()
+	WaitForPendingProfileStore(self)
 
 	local is_user_mock = _use_mock == UseMockTag
 
@@ -1461,7 +1468,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 		return nil
 	end
 
-	WaitForLiveAccessCheck()
+	WaitForPendingProfileStore(self)
 
 	while ProfileService.ServiceLocked == false do
 		-- Updating profile:
@@ -1509,7 +1516,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 		return nil
 	end
 
-	WaitForLiveAccessCheck()
+	WaitForPendingProfileStore(self)
 
 	while ProfileService.ServiceLocked == false do
 		-- Load profile:
@@ -1565,7 +1572,7 @@ function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_succe
 		return false
 	end
 
-	WaitForLiveAccessCheck()
+	WaitForPendingProfileStore(self)
 
 	return StandardProfileUpdateAsyncDataStore(
 		self,
@@ -1614,13 +1621,16 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		_profile_load_jobs = {},
 		_mock_loaded_profiles = {},
 		_mock_profile_load_jobs = {},
+		_is_pending = false,
 	}
 	if IsLiveCheckActive == true then
+		profile_store._is_pending = true
 		coroutine.wrap(function()
 			WaitForLiveAccessCheck()
 			if UseMockDataStore == false then
 				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
 			end
+			profile_store._is_pending = false
 		end)()
 	else
 		if UseMockDataStore == false then
