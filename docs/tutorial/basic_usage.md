@@ -1,4 +1,4 @@
-Most of the work with ProfileService is setting up your data loading code. Afterwards, data is read and written directly to the `Profile.Data` table without the nescessety to use any ProfileService method calls - you set up your own read / write functions, wrappers, classes with profiles as components, etc!
+Most of the work with ProfileService is setting up your data loading code. Afterwards, data is read and written directly to the `Profile.Data` table without the necessity to use any ProfileService method calls - you set up your own read / write functions, wrappers, classes with profiles as components, etc!
 
 The code below is a basic profile loader implementation for ProfileService:
 
