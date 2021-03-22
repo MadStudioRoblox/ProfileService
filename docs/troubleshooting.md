@@ -43,7 +43,7 @@ Just to be clear, ProfileService **is not** a module that trades in speed for se
 
 More often than not, [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) is taking a clearly longer than usual amount of time to load, usually 10 seconds or much more.
 
-```lua
+``` lua
 local start_time = tick()
 ProfileStore:LoadProfileAsync(profile_key, "ForceLoad")
 print(tick() - start_time) --> A value over 10 seconds
@@ -62,7 +62,7 @@ If a player hops to another server (*Server 2*) before the previous one (*Server
 *Server 2* will wait until *Server 1* releases the `Profile`. ProfileService checks the session-lock state of profiles every 10 seconds during a [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) call and this will immediately slow down `Profile` loading very noticably. This is what we would call a **race condition**.
 
 **Mistake example #1:**
-```lua
+``` lua
 Players.PlayerRemoving:Connect(function(player)
     local profile = Profiles[player]
     if profile ~= nil then
@@ -73,7 +73,7 @@ end)
 This example would throw an error, though you would need to be inside the server while another player triggers the `.PlayerRemoving` event.
 
 **Mistake example #2:**
-```lua
+``` lua
 Players.PlayerRemoving:Connect(function(player)
     local profile = Profiles[player]
     if profile ~= nil then
@@ -86,7 +86,7 @@ When you're pretty sure you didn't make any typos, the next thing you should che
 > Disclaimer: I don't advise modifying `Profile.Data` after the player leaves - it's a bad practice in securing your data. You should always store data in a way where unexpectedly losing access to writing to `Profile.Data` (e.g. server crash) would not cause massive data loss.
 
 **Mistake example #3:**
-```lua
+``` lua
 Players.PlayerRemoving:Connect(function(player)
     local profile = Profiles[player]
     if profile ~= nil then
@@ -100,7 +100,7 @@ You should **immediately** release your profiles after the player leaves (`wait(
 **How to be sure my profiles are being released?**  
 
 Add a `print()`:
-```lua
+``` lua
 Players.PlayerRemoving:Connect(function(player)
     local profile = Profiles[player]
     if profile ~= nil then

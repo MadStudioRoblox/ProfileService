@@ -6,17 +6,17 @@
 
 ## ProfileService
 ### ProfileService.ServiceLocked
-```lua
+``` lua
 ProfileService.ServiceLocked   [bool]
 ```
 Set to false when the Roblox server is shutting down.
 `ProfileStore` methods should not be called after this value is set to `false`
 ### ProfileService.IssueSignal
-```lua
+``` lua
 ProfileService.IssueSignal   [ScriptSignal](error_message [string], profile_store_name [string], profile_key [string])
 ```
 Analytics endpoint for DataStore error logging. Example usage:
-```lua
+``` lua
 ProfileService.IssueSignal:Connect(function(error_message, profile_store_name, profile_key)
   pcall(function()
     AnalyticsService:FireEvent(
@@ -29,14 +29,14 @@ ProfileService.IssueSignal:Connect(function(error_message, profile_store_name, p
 end)
 ```
 ### ProfileService.CorruptionSignal
-```lua
+``` lua
 ProfileService.CorruptionSignal   [ScriptSignal](profile_store_name [string], profile_key [string])
 ```
 Analytics endpoint for cases when a DataStore key returns a value that has all or some
 of it's profile components set to invalid data types. E.g., accidentally setting
 Profile.Data to a non table value
 ### ProfileService.CriticalStateSignal
-```lua
+``` lua
 ProfileService.CriticalStateSignal   [ScriptSignal] (is_critical_state [bool])
 ```
 Analytics endpoint for cases when DataStore is throwing too many errors and it's most
@@ -44,7 +44,7 @@ likely affecting your game really really bad - this could be due to developer er
 or due to Roblox server problems. Could be used to alert players about data store outages.
 
 ### ProfileService.GetProfileStore()
-```lua
+``` lua
 ProfileService.GetProfileStore(
     profile_store_name,
     profile_template
@@ -61,7 +61,7 @@ ProfileService.GetProfileStore(
 ## ProfileStore
 ### ProfileStore:LoadProfileAsync()
 
-```lua
+``` lua
 ProfileStore:LoadProfileAsync(
   profile_key,
   not_released_handler
@@ -78,7 +78,7 @@ For basic usage, pass `"ForceLoad"` for the `not_released_handler` argument.
 
 `not_released_handler` as a `function` argument is called when the profile is
 session-locked by a remote Roblox server:
-```lua
+``` lua
 local profile = ProfileStore:LoadProfileAsync(
   "Player_2312310",
   function(place_id, game_job_id)
@@ -113,7 +113,7 @@ responding in time and for handling crashed server session-locks).
     Trying to load a profile that has already been session-locked on the same server will result in an error. You may, however, instantly load the profile again after releasing it with `Profile:Release()`.
 
 ### ProfileStore:GlobalUpdateProfileAsync()
-```lua
+``` lua
 ProfileStore:GlobalUpdateProfileAsync(
   profile_key,
   update_handler
@@ -127,7 +127,7 @@ Used to create and manage `Active` global updates for a specified `Profile`. Can
 Updates should reach the recipient in less than 30 seconds, regardless of whether it was called on the same server the `Profile` is session-locked to. See [Global Updates](#global-updates) for more information.
 
 Example usage of `:GlobalUpdateProfileAsync()`:
-```lua
+``` lua
 ProfileStore:GlobalUpdateProfileAsync(
   "Player_2312310",
   function(global_updates)
@@ -147,7 +147,7 @@ ProfileStore:GlobalUpdateProfileAsync(
 !!! failure "Yielding inside the `update_handler` function will throw an error"
 
 ### ProfileStore:ViewProfileAsync()
-```lua
+``` lua
 ProfileStore:ViewProfileAsync(profile_key) --> [Profile] or nil
 -- profile_key   [string] -- DataStore key
 ```
@@ -155,14 +155,14 @@ Writing and saving is not possible for profiles in view mode. `Profile.Data` and
 if the profile hasn't been created.
 
 ### ProfileStore:WipeProfileAsync()
-```lua
+``` lua
 ProfileStore:WipeProfileAsync(profile_key) --> is_wipe_successful [bool]
 -- profile_key   [string] -- DataStore key
 ```
 Use `:WipeProfileAsync()` to erase user data when complying with right of erasure requests. In live Roblox servers `:WipeProfileAsync()` must be used on profiles created through `ProfileStore.Mock` after `Profile:Release()` and it's known that the `Profile` will no longer be loaded again.
 
 ### ProfileStore.Mock
-```lua
+``` lua
 local ProfileTemplate = {}
 local GameProfileStore = ProfileService.GetProfileStore(
   "PlayerData",
@@ -191,7 +191,7 @@ on profiles stored on a separate, detached "fake" DataStore that will be forgott
 of the same key from `ProfileStore` and `ProfileStore.Mock` in parallel - these will be two different profiles because the regular and mock versions of the same `ProfileStore` are completely isolated from each other.
 
 `ProfileStore.Mock` is useful for customizing your testing environment in cases when you want to [enable Roblox API services](https://developer.roblox.com/en-us/articles/Data-store#using-data-stores-in-studio) in studio, but don't want ProfileService to save to live keys:
-```lua
+``` lua
 local RunService = game:GetService("RunService")
 local GameProfileStore = ProfileService.GetProfileStore("PlayerData", ProfileTemplate)
 if RunService:IsStudio() == true then
@@ -208,7 +208,7 @@ other in any way.
 ## Profile
 
 ### Profile.Data
-```lua
+``` lua
 Profile.Data   [table]
 ```
 `Profile.Data` is the primary variable of a Profile object. The developer is free to read and write from
@@ -216,7 +216,7 @@ the table while it is automatically saved to the [DataStore](https://developer.r
 `Profile.Data` will no longer be saved after being released remotely or locally via `Profile:Release()`.
 
 ### Profile.MetaData
-```lua
+``` lua
 Profile.MetaData [table] (Read-only) -- Data about the profile itself
 
 Profile.MetaData.ProfileCreateTime [number] (Read-only)
@@ -244,32 +244,32 @@ Profile.MetaData.MetaTagsLatest [table] (Read-only)
 on the same DataStore key together with `Profile.Data`.
 
 ### Profile.GlobalUpdates
-```lua
+``` lua
 Profile.GlobalUpdates [GlobalUpdates]
 ```
 
 This is the `GlobalUpdates` object tied to this specific `Profile`. It exposes `GlobalUpdates` methods for update processing. (See [Global Updates](#global-updates) for more info)
 
 ### Profile:IsActive()
-```lua
+``` lua
 Profile:IsActive() --> [bool]
 ```
 Returns `true` while the profile is session-locked and saving of changes to `Profile.Data` is guaranteed.
 ### Profile:GetMetaTag()
-```lua
+``` lua
 Profile:GetMetaTag(tag_name) --> value
 -- tag_name   [string]
 ```
 Equivalent of `Profile.MetaData.MetaTags[tag_name]`. See [Profile:SetMetaTag()](#profilesetmetatag) for more info.
 ### Profile:Reconcile()
-```lua
+``` lua
 Profile:Reconcile() --> nil
 ```
 Fills in missing variables inside `Profile.Data` from `profile_template` table that was provided when calling `ProfileService.GetProfileStore()`. It's often necessary to use `:Reconcile()` if you're applying changes to your
 `profile_template` over the course of your game's development after release.
 
 The following function is used in the reconciliation process:
-```lua
+``` lua
 local function ReconcileTable(target, template)
 	for k, v in pairs(template) do
 		if type(k) == "string" then -- Only string keys will be reconciled
@@ -287,7 +287,7 @@ local function ReconcileTable(target, template)
 end
 ```
 ### Profile:ListenToRelease()
-```lua
+``` lua
 Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
 -- listener   [function](place_id / nil, game_job_id / nil)
 ```
@@ -303,13 +303,13 @@ the player leaves the game so it's recommended to simply [:Kick()](https://devel
     any yielding after it is confirmed that both profiles are active.
 
 ### Profile:Release()
-```lua
+``` lua
 Profile:Release()
 ```
 Removes the session lock for this profile for this Roblox server. Call this method after you're
 done working with the `Profile` object. Profile data will be immediately saved for the last time.
 ### Profile:SetMetaTag()
-```lua
+``` lua
 Profile:SetMetaTag(tag_name, value)
 -- tag_name   [string]
 -- value      -- Any value supported by DataStore
@@ -330,7 +330,7 @@ of `Profile.MetaData.MetaTags` that has been successfully saved to the DataStore
     You can use `Profile.MetaData.MetaTagsLatest` for product purchase confirmation (By storing `receiptInfo.PurchaseId` values inside `Profile.MetaData.MetaTags` and waiting for them to appear in `Profile.MetaData.MetaTagsLatest`). Don't forget to clear really old `PurchaseId`'s to stay under DataStore limits.
 
 ### Profile:Save()
-```lua
+``` lua
 Profile:Save() -- Call to quickly progress GlobalUpdates
 --   state or to speed up save validation processes
 --   (Does not yield)
@@ -361,21 +361,21 @@ Global updates can be `Active`, `Locked` and `Cleared`:
 ### ***Always available***
 
 #### GlobalUpdates:GetActiveUpdates()
-```lua
+``` lua
 GlobalUpdates:GetActiveUpdates() --> [table] { {update_id, update_data}, ...}
 ```
 Should be used immediately after a `Profile` is loaded to scan and progress any pending `Active` updates to `Locked` state:
-```lua
+``` lua
 for _, update in ipairs(profile.GlobalUpdates:GetActiveUpdates()) do
   profile.GlobalUpdates:LockActiveUpdate(update[1])
 end
 ```
 #### GlobalUpdates:GetLockedUpdates()
-```lua
+``` lua
 GlobalUpdates:GetLockedUpdates() --> [table] { {update_id, update_data}, ...}
 ```
 Should be used immediately after a `Profile` is loaded to scan and progress any pending `Locked` updates to `Cleared` state:
-```lua
+``` lua
 for _, update in ipairs(profile.GlobalUpdates:GetLockedUpdates()) do
   local update_id = update[1]
   local update_data = update[2]
@@ -387,18 +387,18 @@ end
 ```
 ### ***Only when accessed from `Profile.GlobalUpdates`***
 #### GlobalUpdates:ListenToNewActiveUpdate()
-```lua
+``` lua
 GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection]
 -- listener   [function](update_id, update_data)
 ```
 In most games, you should progress all `Active` updates to `Locked` state:
-```lua
+``` lua
 profile.GlobalUpdates:ListenToNewActiveUpdate(function(update_id, update_data)
   profile.GlobalUpdates:LockActiveUpdate(update_id)
 end)
 ```
 #### GlobalUpdates:ListenToNewLockedUpdate()
-```lua
+``` lua
 GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection]
 -- listener   [function](update_id, update_data)
 -- Must always call GlobalUpdates:ClearLockedUpdate(update_id)
@@ -406,7 +406,7 @@ GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection]
 ```
 When you get a `Locked` update via `GlobalUpdates:ListenToNewLockedUpdate()`, the update is
 ready to be proccessed and immediately locked:
-```lua
+``` lua
 profile.GlobalUpdates:ListenToNewLockedUpdate(function(update_id, update_data)
   if update_data.Type == "AdminGift" and update_data.Item == "Coins" then
     profile.Data.Coins = profile.Data.Coins + update_data.Amount
@@ -415,7 +415,7 @@ profile.GlobalUpdates:ListenToNewLockedUpdate(function(update_id, update_data)
 end)
 ```
 #### GlobalUpdates:LockActiveUpdate()
-```lua
+``` lua
 GlobalUpdates:LockActiveUpdate(update_id)
 -- update_id   [number] -- Id of an existing global update
 ```
@@ -428,7 +428,7 @@ an auto-save (less than 30 seconds) or `Profile:Save()`.
     `Profile` will be active when `GlobalUpdates:ListenToNewActiveUpdate()` listeners are triggered.
   
 #### GlobalUpdates:ClearLockedUpdate()
-```lua
+``` lua
 GlobalUpdates:ClearLockedUpdate(update_id)
 -- update_id   [number] -- Id of an existing global update
 ```
@@ -441,13 +441,13 @@ Clears a `Locked` update completely from the profile.
 
 ### ***Available inside `update_handler` during a `ProfileStore:GlobalUpdateProfileAsync()` call***
 #### GlobalUpdates:AddActiveUpdate()
-```lua
+``` lua
 GlobalUpdates:AddActiveUpdate(update_data)
 -- update_data   [table] -- Your custom global update data
 ```
 Used to send a new `Active` update to the profile.
 #### GlobalUpdates:ChangeActiveUpdate()
-```lua
+``` lua
 GlobalUpdates:ChangeActiveUpdate(update_id, update_data)
 -- update_id     [number] -- Id of an existing global update
 -- update_data   [table] -- New data that replaces previously set update_data
@@ -456,7 +456,7 @@ Changing `Active` updates can be used for stacking player gifts, particularly wh
 lots of players can be sending lots of gifts to a Youtube celebrity so the `Profile` would not
 exceed the [DataStore data limit](https://developer.roblox.com/en-us/articles/Datastore-Errors#data-limits).
 #### GlobalUpdates:ClearActiveUpdate()
-```lua
+``` lua
 GlobalUpdates:ClearActiveUpdate(update_id)
 -- update_id   [number] -- Id of an existing global update
 ```

@@ -7,7 +7,7 @@ The code below is a basic profile loader implementation for ProfileService:
 	ProfileService may release (destroy) the profile before the player leaves the server - this has to be
 	handled by using `Profile:ListenToRelease(listener_function)` - any amount of functions can be added!
 
-```lua
+``` lua
 -- ProfileTemplate table is what empty profiles will default to.
 -- Updating the template will not include missing template values
 --   in existing player profiles!
