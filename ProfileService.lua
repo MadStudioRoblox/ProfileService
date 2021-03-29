@@ -443,7 +443,7 @@ local function RegisterIssue(error_message, profile_store_name, profile_key) -- 
 end
 
 local function RegisterCorruption(profile_store_name, profile_key) -- Called when a corrupted profile is loaded
-	warn("[ProfileService]: Profile corruption - ProfileStore = \"" .. profile_store_name .. "\", Key = \"" .. profile_key .. "\"")
+	warn("[ProfileService]: Resolved profile corruption (Store:\"" .. profile_store_name .. "\";Key:\"" .. profile_key .. "\")")
 	ProfileService.CorruptionSignal:Fire(profile_store_name, profile_key)
 end
 
@@ -1438,13 +1438,15 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 							aggressive_steal = true
 							Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
 						else
-							error("[ProfileService]: Invalid return from not_released_handler")
+							error("[ProfileService]: Invalid return from not_released_handler (\"" .. tostring(handler_result) .. "\")(" .. type(handler_result) .. ");" ..
+								"\n(Store:\"" .. self._profile_store_name .. "\";Key:\"" .. profile_key .. "\"); Traceback:\n" .. debug.traceback()
+							)
 						end
 					end
 				end
 			else
 				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
-				error("[ProfileService]: Invalid ActiveSession value in Profile.MetaData - Fatal corruption") -- It's unlikely this will ever fire
+				return nil -- In this scenario it is likely the ProfileService.ServiceLocked flag was raised
 			end
 		else
 			Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
