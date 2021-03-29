@@ -1269,6 +1269,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 				loaded_data = profile_load_job[2]
 				profile_load_jobs[profile_key] = nil
 			else
+				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
 				return nil
 			end
 		else
@@ -1341,6 +1342,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 				loaded_data = profile_load_job[2]
 				profile_load_jobs[profile_key] = nil
 			else
+				ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
 				return nil -- Load job yoinked
 			end
 		end
