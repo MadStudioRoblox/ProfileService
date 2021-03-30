@@ -1620,6 +1620,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 			},
 			_use_mock == UseMockTag
 		)
+		CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
 		-- Handling loaded_data:
 		if loaded_data ~= nil then
 			-- Return GlobalUpdates object (Update successful):
@@ -1660,6 +1661,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 			},
 			_use_mock == UseMockTag
 		)
+		CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
 		-- Handle load_data:
 		if loaded_data ~= nil then
 			-- Create Profile object:
@@ -1704,7 +1706,7 @@ function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_succe
 
 	WaitForPendingProfileStore(self)
 
-	return StandardProfileUpdateAsyncDataStore(
+	local wipe_status = StandardProfileUpdateAsyncDataStore(
 		self,
 		profile_key,
 		{
@@ -1712,6 +1714,10 @@ function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_succe
 		},
 		_use_mock == UseMockTag
 	)
+	
+	CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
+	
+	return wipe_status
 end
 
 -- New ProfileStore:
