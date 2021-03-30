@@ -115,6 +115,11 @@
 			
 		Profile:Release() -- Call after the session has finished working with this profile
 			e.g., after the player leaves (Profile object will become expired) (Does not yield)
+
+		Profile:ListenToHopReady(listener) --> [ScriptConnection] () -- Passed listener will be executed after the releasing UpdateAsync call finishes;
+			--	Wrap universe teleport requests with this method AFTER releasing the profile to improve session lock sharing between universe places;
+			--  :ListenToHopReady() will usually call the listener in around a second, but may ocassionally take up to 7 seconds when a release happens
+			--	next to an auto-update in regular usage scenarios.
 		
 		-- DANGEROUS METHODS - Will error if the profile is expired:
 		-- MetaTags - Save and read values stored in Profile.MetaData for storing info about the
@@ -147,7 +152,7 @@
 local SETTINGS = {
 	
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
-	LoadProfileRepeatDelay = 15, -- Seconds between successive DataStore calls for the same key
+	RobloxWriteCooldown = 7, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 4, -- Steps taken before ForceLoad request steals the active session for a profile
 	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
 	-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
@@ -289,6 +294,8 @@ local ProfileService = {
 						_profile_key = "", -- [string]
 						
 						_release_listeners = {listener, ...} / nil, -- [table / nil]
+						_hop_ready_listeners = {listener, ...} / nil, -- [table / nil]
+						_hop_ready = false,
 						
 						_view_mode = true / nil, -- [bool / nil]
 						
@@ -392,6 +399,20 @@ local MockDataStore = ProfileService._mock_data_store -- Mock data store used wh
 local UserMockDataStore = ProfileService._user_mock_data_store -- Separate mock data store accessed via ProfileStore.Mock
 local UseMockTag = {}
 
+local CustomWriteQueue = {
+	--[[
+		[store] = {
+			[key] = {
+				LastWrite = os.clock(),
+				Queue = {callback, ...},
+				CleanupJob = nil,
+			},
+			...
+		},
+		...
+	--]]
+}
+
 ----- Utils -----
 
 local function DeepCopyTable(t)
@@ -423,6 +444,77 @@ local function ReconcileTable(target, template)
 end
 
 ----- Private functions -----
+
+local function CustomWriteQueueCleanup(store, key)
+	if CustomWriteQueue[store] ~= nil then
+		CustomWriteQueue[store][key] = nil
+		if next(CustomWriteQueue[store]) == nil then
+			CustomWriteQueue[store] = nil
+		end
+	end
+end
+
+local function CustomWriteQueueMarkForCleanup(store, key)
+	if CustomWriteQueue[store] ~= nil then
+		if CustomWriteQueue[store][key] ~= nil then
+
+			local queue_data = CustomWriteQueue[store][key]
+			local queue = queue_data.Queue
+
+			if queue_data.CleanupJob == nil then
+
+				queue_data.CleanupJob = RunService.Heartbeat:Connect(function()
+					if os.clock() - queue_data.LastWrite > SETTINGS.RobloxWriteCooldown and #queue == 0 then
+						queue_data.CleanupJob:Disconnect()
+						CustomWriteQueueCleanup(store, key)
+					end
+				end)
+
+			end
+
+		elseif next(CustomWriteQueue[store]) == nil then
+			CustomWriteQueue[store] = nil
+		end
+	end
+end
+
+local function CustomWriteQueueAsync(callback, store, key) --> ... -- Passed return from callback
+
+	if CustomWriteQueue[store] == nil then
+		CustomWriteQueue[store] = {}
+	end
+	if CustomWriteQueue[store][key] == nil then
+		CustomWriteQueue[store][key] = {LastWrite = 0, Queue = {}, CleanupJob = nil}
+	end
+
+	local queue_data = CustomWriteQueue[store][key]
+	local queue = queue_data.Queue
+
+	-- Cleanup job:
+
+	if queue_data.CleanupJob ~= nil then
+		queue_data.CleanupJob:Disconnect()
+		queue_data.CleanupJob = nil
+	end
+
+	-- Queue logic:
+
+	if os.clock() - queue_data.LastWrite > SETTINGS.RobloxWriteCooldown and #queue == 0 then
+		queue_data.LastWrite = os.clock()
+		return callback()
+	else
+		table.insert(queue, callback)
+		while true do
+			if os.clock() - queue_data.LastWrite > SETTINGS.RobloxWriteCooldown and queue[1] == callback then
+				table.remove(queue, 1)
+				queue_data.LastWrite = os.clock()
+				return callback()
+			end
+			Madwork.HeartbeatWait()
+		end
+	end
+
+end
 
 local function WaitForLiveAccessCheck() -- This function was created to prevent the ProfileService module yielding execution when required
 	while IsLiveCheckActive == true do
@@ -552,7 +644,13 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 				loaded_data = MockUpdateAsync(MockDataStore, profile_store._profile_store_name, profile_key, transform_function)
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			else
-				loaded_data = profile_store._global_data_store:UpdateAsync(profile_key, transform_function)
+				loaded_data = CustomWriteQueueAsync(
+					function() -- Callback
+						return profile_store._global_data_store:UpdateAsync(profile_key, transform_function)
+					end,
+					profile_store._profile_store_name, -- Store
+					profile_key -- Key
+				)
 			end
 		else
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
@@ -642,7 +740,7 @@ local function ReleaseProfileInternally(profile)
 		game_job_id = active_session[2]
 	end
 	for _, listener in ipairs(profile._release_listeners) do
-		listener(place_id, game_job_id)
+		coroutine.wrap(listener)(place_id, game_job_id)
 	end
 	profile._release_listeners = {}
 end
@@ -826,6 +924,15 @@ local function SaveProfileAsync(profile, release_from_session)
 				-- 7) Release profile if it hasn't been released yet: --
 				if is_active == true then
 					ReleaseProfileInternally(profile)
+				end
+				-- Cleanup reference in custom write queue:
+				CustomWriteQueueMarkForCleanup(profile._profile_store._profile_store_name, profile._profile_key)
+				-- Hop ready listeners:
+				if profile._hop_ready == false then
+					profile._hop_ready = true
+					for _, listener in ipairs(profile._hop_ready_listeners) do
+						coroutine.wrap(listener)()
+					end
 				end
 			end
 		elseif repeat_save_flag == true then
@@ -1101,6 +1208,8 @@ local Profile = {
 		_profile_key = "", -- [string]
 		
 		_release_listeners = {listener, ...} / nil, -- [table / nil]
+		_hop_ready_listeners = {listener, ...} / nil, -- [table / nil]
+		_hop_ready = false,
 		
 		_view_mode = true / nil, -- [bool / nil]
 		
@@ -1190,6 +1299,21 @@ function Profile:Release()
 	end
 	if self:IsActive() == true then
 		coroutine.wrap(SaveProfileAsync)(self, true) -- Call save function in a new thread with release_from_session = true
+	end
+end
+
+function Profile:ListenToHopReady(listener) --> [ScriptConnection] ()
+	if type(listener) ~= "function" then
+		error("[ProfileService]: Only a function can be set as listener in Profile:ListenToHopReady()")
+	end
+	if self._view_mode == true then
+		error("[ProfileService]: Can't listen to HopReady in view mode")
+	end
+	if self._hop_ready == true then
+		coroutine.wrap(listener)()
+	else
+		table.insert(self._hop_ready_listeners, listener)
+		return Madwork.NewArrayScriptConnection(self._hop_ready_listeners, listener)
 	end
 end
 
@@ -1375,6 +1499,8 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						_profile_key = profile_key,
 
 						_release_listeners = {},
+						_hop_ready_listeners = {},
+						_hop_ready = false,
 
 						_load_timestamp = os.clock(),
 
@@ -1416,7 +1542,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 									steal_session = true
 								end
 							end
-							Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+							Madwork.HeartbeatWait() -- Overload prevention
 						else
 							-- Another session tried to force load this profile:
 							ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
@@ -1424,21 +1550,21 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						end
 						request_force_load = false -- Only request a force load once
 					elseif aggressive_steal == true then
-						Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+						Madwork.HeartbeatWait() -- Overload prevention
 					else
 						local handler_result = not_released_handler(active_session[1], active_session[2])
 						if handler_result == "Repeat" then
-							Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+							Madwork.HeartbeatWait() -- Overload prevention
 						elseif handler_result == "Cancel" then
 							ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
 							return nil
 						elseif handler_result == "ForceLoad" then
 							force_load = true
 							request_force_load = true
-							Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+							Madwork.HeartbeatWait() -- Overload prevention
 						elseif handler_result == "Steal" then
 							aggressive_steal = true
-							Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+							Madwork.HeartbeatWait() -- Overload prevention
 						else
 							error("[ProfileService]: Invalid return from not_released_handler (\"" .. tostring(handler_result) .. "\")(" .. type(handler_result) .. ");" ..
 								"\n(Store:\"" .. self._profile_store_name .. "\";Key:\"" .. profile_key .. "\"); Traceback:\n" .. debug.traceback()
@@ -1451,7 +1577,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 				return nil -- In this scenario it is likely the ProfileService.ServiceLocked flag was raised
 			end
 		else
-			Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+			Madwork.HeartbeatWait() -- Overload prevention
 		end
 	end
 	ActiveProfileLoadJobs = ActiveProfileLoadJobs - 1
@@ -1503,7 +1629,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 			setmetatable(global_updates_object, GlobalUpdates)
 			return global_updates_object
 		else
-			Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again
+			Madwork.HeartbeatWait() -- Overload prevention
 		end
 	end
 	return nil -- Return nothing (Update unsuccessful)
@@ -1559,7 +1685,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 			-- Returning Profile object:
 			return profile
 		else
-			Madwork.HeartbeatWait(SETTINGS.LoadProfileRepeatDelay) -- Let the cycle repeat again after a delay
+			Madwork.HeartbeatWait() -- Overload prevention
 		end
 	end
 	return nil -- If loop breaks return nothing
