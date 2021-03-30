@@ -26,14 +26,15 @@ This is a limitation of the [DataStore API](https://developer.roblox.com/en-us/a
 !!! warning
     Failure to prevent these data types may result in silent data loss, silent errors, fatal errors and overall failure to save data.
 
-## Profiles take over 10 seconds to load
+## Profiles take over 7 seconds to load
 
 !!! notice
         Due to technical limitations, it's expected that at least 5% of the time, when the player hops servers rapidly, the profile
-        can take up to 15 seconds to load. If implemented correctly, ProfileService will load profiles as fast as the Roblox API allows
+        can take up to 7 seconds to load (Can be greatly improved by using [Profile:ListenToHopReady()](/ProfileService/api/#profilelistentohopready)).
+        If implemented correctly, ProfileService will load profiles as fast as the Roblox API allows
         it when the player joins a server without a server hop. It's recommended to release profiles right before universe teleports
         to speed up session lock releasing and further preventing time penalties related to server hopping as much as possible.
-        If your profiles load slower than 1 to 2 seconds on a constant basis, continue reading this topic.
+        If your profiles load slower than 7 seconds on a constant basis, continue reading this topic.
 
 **MAKE SURE YOUR [ProfileService](/ProfileService/tutorial/settingup/) MODULE IS UP TO DATE**
 
@@ -41,7 +42,7 @@ Just to be clear, ProfileService **is not** a module that trades in speed for se
 
 **The problem**
 
-More often than not, [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) is taking a clearly longer than usual amount of time to load, usually 10 seconds or much more.
+More often than not, [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) is taking a clearly longer than usual amount of time to load, usually 7 seconds or much more.
 
 ``` lua
 local start_time = tick()
@@ -53,13 +54,14 @@ print(tick() - start_time) --> A value over 10 seconds
 
  - *Is your code __really__ releasing your profiles after it's done working with them?*
  - *Are you releasing your profiles __immediately__ after the player leaves the game?*
+ - *If teleporting between places in your game (universe), are you using [Profile:ListenToHopReady()](/ProfileService/api/#profilelistentohopready)?*
 
 Functions connected to [Players.PlayerRemoving](https://developer.roblox.com/en-us/api-reference/event/Players/PlayerRemoving)
 can be tricky to notice errors for because, when testing alone, you will be leaving the game before the errors appear on the
 [developer console](https://developer.roblox.com/en-us/articles/Developer-Console).
 
 If a player hops to another server (*Server 2*) before the previous one (*Server 1*) releases (removes session-lock from) the player's `Profile`,
-*Server 2* will wait until *Server 1* releases the `Profile`. ProfileService checks the session-lock state of profiles every 10 seconds during a [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) call and this will immediately slow down `Profile` loading very noticably. This is what we would call a **race condition**.
+*Server 2* will wait until *Server 1* releases the `Profile`. ProfileService checks the session-lock state of profiles every 7 seconds during a [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) call and this will immediately slow down `Profile` loading very noticably. This is what we would call a **race condition**.
 
 **Mistake example #1:**
 ``` lua
@@ -97,6 +99,19 @@ end)
 ```
 You should **immediately** release your profiles after the player leaves (`wait(1)` is bad in this example), otherwise you risk creating a race condition where another server that the player joined is trying to load a `Profile` that hasn't been released yet.
 
+**Mistake example #4:**
+``` lua
+local profile_key, update_handler
+
+-- This simulates excessive UpdateAsync calls for the same Profile key:
+for i = 1, 6 do
+    ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler)
+end
+```
+Excessive use of [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) can lead to dead session locks and event lost
+`Profile.Data` (latter is mostly possible only if the `Profile` is loaded in the same session as `:GlobalUpdateProfileAsync()` is called). This is due to a queue
+system that executes every write request for the `Profile` every 7 seconds - if this queue grows larger than the [BindToClose timeout](https://developer.roblox.com/en-us/api-reference/function/DataModel/BindToClose) (approx. 30 seconds), some requests in the queue can be lost after the game shuts down.
+
 **How to be sure my profiles are being released?**  
 
 Add a `print()`:
@@ -114,8 +129,8 @@ If you're having long `Profile` loading issues, this is the first thing you shou
 When [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprofileasync) finishes loading in\.\.\.
 
  - less than 2 seconds - ***You're good!***
- - 10 to 30 seconds - ***Most likely a player server hop race condition (Mistake example #3)***
- - Over 60 seconds - ***The previous server is not releasing the profile (Mistake examples #1 and #2)***
+ - 7 to 30 seconds - ***Most likely a player server hop race condition (Mistake example #3)***
+ - Over 60 seconds - ***The previous server is not releasing the profile / Dead session lock (Mistake examples #1, #2 and #4)***
 
 
 ## DataStore warnings caused by ProfileService

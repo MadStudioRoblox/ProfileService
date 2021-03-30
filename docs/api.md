@@ -146,6 +146,11 @@ ProfileStore:GlobalUpdateProfileAsync(
 
 !!! failure "Yielding inside the `update_handler` function will throw an error"
 
+!!! failure "Avoid rapid use of ProfileStore:GlobalUpdateProfileAsync()"
+    Excessive use of [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) can lead to dead session locks and event lost
+    `Profile.Data` (latter is mostly possible only if the `Profile` is loaded in the same session as `:GlobalUpdateProfileAsync()` is called). This is due to a queue
+    system that executes every write request for the `Profile` every 7 seconds - if this queue grows larger than the [BindToClose timeout](https://developer.roblox.com/en-us/api-reference/function/DataModel/BindToClose) (approx. 30 seconds), some requests in the queue can be lost after the game shuts down.
+
 ### ProfileStore:ViewProfileAsync()
 ``` lua
 ProfileStore:ViewProfileAsync(profile_key) --> [Profile] or nil
@@ -289,7 +294,7 @@ end
 ### Profile:ListenToRelease()
 ``` lua
 Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / nil, game_job_id / nil)
--- listener   [function](place_id / nil, game_job_id / nil)
+-- listener   [function] (place_id / nil, game_job_id / nil)
 ```
 Listener functions subscribed to `Profile:ListenToRelease()` will be called when
 the profile is released remotely (Being `"ForceLoad"`'ed on a remote server) or
@@ -308,6 +313,33 @@ Profile:Release()
 ```
 Removes the session lock for this profile for this Roblox server. Call this method after you're
 done working with the `Profile` object. Profile data will be immediately saved for the last time.
+### Profile:ListenToHopReady()
+``` lua
+Profile:ListenToHopReady(listener) --> [ScriptConnection] ()
+-- listener   [function] ()
+```
+In many cases ProfileService will be fast enough when loading and releasing profiles as the player teleports between
+places belonging to the same universe / game. However, if you're experiencing noticable delays when loading profiles
+after a universe teleport, you should try implementing `:ListenToHopReady()`.
+
+A listener passed to `:ListenToHopReady()` will be executed after the releasing UpdateAsync call finishes.
+`:ListenToHopReady()` will usually call the listener in around a second, but may ocassionally take up to 7
+seconds when a profile is released next to an auto-update interval (regular usage scenario - rapid
+loading / releasing of the same profile key may yield different results).
+
+**Example use:**
+``` lua
+local TeleportService = game:GetService("TeleportService")
+local profile, player, place_id
+
+profile:Release()
+profile:ListenToHopReady(function()
+  TeleportService:TeleportAsync(place_id, {player})
+end)
+```
+
+In short, `Profile:ListenToRelease()` and `Profile:ListenToHopReady()` will both execute the listener function after release, but `Profile:ListenToHopReady()` will
+additionally wait until the session lock is removed from the `Profile`.
 ### Profile:SetMetaTag()
 ``` lua
 Profile:SetMetaTag(tag_name, value)
