@@ -761,9 +761,7 @@ local function CheckForNewGlobalUpdates(profile, old_global_updates_data, new_gl
 		end
 		-- A global update is new when it didn't exist before or its version_id or update_locked state changed:
 		local is_new = false
-		if old_global_update == nil then
-			is_new = true
-		elseif new_global_update[2] > old_global_update[2] or new_global_update[3] ~= old_global_update[3] then
+		if old_global_update == nil or new_global_update[2] > old_global_update[2] or new_global_update[3] ~= old_global_update[3] then
 			is_new = true
 		end
 		if is_new == true then
@@ -907,6 +905,7 @@ local function SaveProfileAsync(profile, release_from_session)
 			profile.MetaData.MetaTags = keep_session_meta_tag_reference
 			-- 5) Check if session still owns the profile: --
 			local active_session = loaded_data.MetaData.ActiveSession
+            -- selene:allow(unused_variable)
 			local force_load_session = loaded_data.MetaData.ForceLoadSession
 			local session_load_count = loaded_data.MetaData.SessionLoadCount
 			local session_owns_profile = false
@@ -1585,9 +1584,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 end
 
 function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use_mock) --> [GlobalUpdates / nil] (update_handler(GlobalUpdates))
-	if type(profile_key) ~= "string" then
-		error("[ProfileService]: Invalid profile_key")
-	elseif string.len(profile_key) == 0 then
+	if type(profile_key) ~= "string" or string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
 	if type(update_handler) ~= "function" then
@@ -1637,9 +1634,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 end
 
 function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / nil]
-	if type(profile_key) ~= "string" then
-		error("[ProfileService]: Invalid profile_key")
-	elseif string.len(profile_key) == 0 then
+	if type(profile_key) ~= "string" or string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
 
@@ -1694,9 +1689,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 end
 
 function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_successful [bool]
-	if type(profile_key) ~= "string" then
-		error("[ProfileService]: Invalid profile_key")
-	elseif string.len(profile_key) == 0 then
+	if type(profile_key) ~= "string" or string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
 
@@ -1820,7 +1813,7 @@ RunService.Heartbeat:Connect(function()
 			if os_clock - profile._load_timestamp < SETTINGS.AutoSaveProfiles then
 				-- This profile is freshly loaded - auto-saving immediately after loading will cause a warning in the log:
 				profile = nil
-				for i = 1, auto_save_list_length - 1 do
+				for _ = 1, auto_save_list_length - 1 do
 					-- Move auto save index to the right:
 					AutoSaveIndex = AutoSaveIndex + 1
 					if AutoSaveIndex > auto_save_list_length then
