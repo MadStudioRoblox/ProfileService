@@ -140,19 +140,11 @@ When [ProfileStore:LoadProfileAsync()](/ProfileService/api/#profilestoreloadprof
 _"DataStore request was added to queue. If request queue fills, further requests will be dropped.
 Try sending fewer requests. Key = XXXXXX"_
 
-!!! notice
-        Currently such DataStore warnings may sometimes occur after calling `Profile:Release()` - A warning will be thrown when
-        an auto-save occurs moments before `Profile:Release()` is called. It's desired that `Profile:Release()` saves the
-        profile as fast as the Roblox API can allow it, so there's currently no known way to prevent this warning practically.
-        This is not a threat to your data - read the rest of this topic to learn more.
-
 **Is this really bad?**
 
-If you're only getting one or two warnings every 30 seconds or less, most likely not. If you're receiving 10+ warnings like that per minute, you might be using [Profile:Save()](/ProfileService/api/#profilesave) not the way it was intended to be used (See the [API](/ProfileService/api/#profilesave) to learn more). Calling [Profile:Save()](/ProfileService/api/#profilesave) several times in succession with periods less than 5 seconds between the calls will guarantee warnings like this. If you're getting 5+ warnings every minute (based on the nature of your game), you should consider not using [Profile:Save()](/ProfileService/api/#profilesave) at all.
+If you're only getting one or two warnings every couple of minutes or so, most likely not. Since March 2021 the ProfileService module now uses a custom queue system which greatly reduces Roblox API queue warnings.
 
 **What does this warning mean?**
-
-In the particular case of ProfileService, such warnings will be thrown when two successive [UpdateAsync](https://developer.roblox.com/en-us/api-reference/function/GlobalDataStore/UpdateAsync) calls happen too close to each other (around less than 5 seconds between each).
 
 As of writing this guide (July 2020), based on a [DevForum thread](https://devforum.roblox.com/t/details-on-datastoreservice-for-advanced-developers/175804), Rapid successive UpdateAsync calls will be throttled by the DataStoreService and added to a queue:
 
@@ -160,18 +152,6 @@ As of writing this guide (July 2020), based on a [DevForum thread](https://devfo
 >
 > Every actual budget type (GetAsync, SetIncrementAsync, GetSortedAsync, OnUpdateAsync, SetIncrementSortedAsync) has its own throttling queue. Each of these five throttling queues has a queue size of **30 throttled requests max**. Throttled requests are added to the queue of the corresponding budget type that it consumes.
 
-Based on this information, and my [personal testing](https://github.com/MadStudioRoblox/ProfileService/blob/master/ProfileTest.server.lua), your data is not immediately at risk when you're only receiving 1 - 2 warnings per minute. These warnings only notify you that anything that has been requested to be saved to the DataStore will be saved after a longer delay.
-
 **When will you get warnings**
 
-Again, getting one or two warnings per minute is not going to negatively affect your game in any way. Here are a few scenarios where you're likely to receive a warning:
-
- - Calling [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) right after loading a profile on the same server or very close to it's auto-save step (every 30 seconds). [:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) works for profiles loaded on the same server, but it's intended for use with remote or not loaded profiles.
- - Rapidly loading and releasing the same `Profile`.
- - Releasing the `Profile` as soon as it is loaded.
-
- **Can I completely get rid of all warnings while using ProfileService?**
-
- No - you're going to be stuck with seeing these warnings time to time. ProfileService tries hard to prevent DataStore warnings from throwing as much as possible, but there's no practical way to completely avoid these warnings without compromising on save stability. Personally, I think Roblox should handle queue warnings in a different way since these warnings don't always signify real problems with your code.
-
- Other DataStore implementations don't suffer from such warnings because they might not be auto-saving, using session locking or try to do final saves as soon as the player leaves - features that might need to unexpectedly call DataStore methods quickly in succession.
+Queue warnings can no longer be caused by faulty use of ProfileService as of March 2021 (Go update now you bastard). I expect these warnings to sometimes pop up during game startup or huge lag spikes / mild API outages.
