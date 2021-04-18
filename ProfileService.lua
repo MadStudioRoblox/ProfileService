@@ -1726,11 +1726,19 @@ end
 
 -- New ProfileStore:
 
-function ProfileService.GetProfileStore(profile_store_name, profile_template) --> [ProfileStore]
+function ProfileService.GetProfileStore(profile_store_name, profile_template, profile_store_scope) --> [ProfileStore]
 	if type(profile_store_name) ~= "string" then
 		error("[ProfileService]: profile_store_name must be a string")
 	elseif string.len(profile_store_name) == 0 then
 		error("[ProfileService]: Invalid profile_store_name")
+	end
+
+	if profile_store_scope ~= nil then
+		if type(profile_store_scope) ~= "string" then
+			error("[ProfileService]: profile_store_scope must be a string")
+		elseif string.len(profile_store_scope) == 0 then
+			error("[ProfileService]: Invalid profile_store_scope")
+		end
 	end
 
 	if type(profile_template) ~= "table" then
@@ -1768,13 +1776,13 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		coroutine.wrap(function()
 			WaitForLiveAccessCheck()
 			if UseMockDataStore == false then
-				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
 			end
 			profile_store._is_pending = false
 		end)()
 	else
 		if UseMockDataStore == false then
-			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
 		end
 	end
 	setmetatable(profile_store, ProfileStore)
