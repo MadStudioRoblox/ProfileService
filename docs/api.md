@@ -46,10 +46,17 @@ or due to Roblox server problems. Could be used to alert players about data stor
 ### ProfileService.GetProfileStore()
 ``` lua
 ProfileService.GetProfileStore(
-    profile_store_name,
+    profile_store_index,
     profile_template
 ) --> [ProfileStore]
--- profile_store_name   [string] -- DataStore name
+-- profile_store_index   [string] -- DataStore name
+-- OR
+-- profile_store_index   [table]: -- Allows the developer to define more GlobalDataStore variables
+--  {
+--    Name = "StoreName", -- [string] -- DataStore name
+--    -- Optional arguments:
+--    Scope = "StoreScope", -- [string] -- DataStore scope
+--  }
 -- profile_template     [table] -- Profile.Data will default to
 --   given table (deep-copy) when no data was saved previously
 ```
@@ -340,6 +347,15 @@ end)
 
 In short, `Profile:ListenToRelease()` and `Profile:ListenToHopReady()` will both execute the listener function after release, but `Profile:ListenToHopReady()` will
 additionally wait until the session lock is removed from the `Profile`.
+
+### Profile:Identify()
+```lua
+Profile:Identify() --> [string]
+-- Example return: "[Store:"GameData";Scope:"Live";Key:"Player_2312310"]"
+```
+
+Returns a string containing DataStore name, scope and key; Used for debugging;
+
 ### Profile:SetMetaTag()
 ``` lua
 Profile:SetMetaTag(tag_name, value)
