@@ -51,10 +51,26 @@ local DataStoreService = game:GetService("DataStoreService")
 ----- Private Variables -----
 
 local RandomProfileStoreKey1 = "Test_" .. tostring(HttpService:GenerateGUID())
-local RandomProfileStoreKey2 = "Test_" .. tostring(HttpService:GenerateGUID())
+local RandomProfileStoreScope1 = "Scope_" .. tostring(HttpService:GenerateGUID())
 
-local GameProfileStore1 = ProfileService.GetProfileStore(RandomProfileStoreKey1, SETTINGS.ProfileTemplate1)
-local GameProfileStore2 = ProfileService.GetProfileStore(RandomProfileStoreKey2, SETTINGS.ProfileTemplate2)
+local RandomProfileStoreKey2 = "Test_" .. tostring(HttpService:GenerateGUID())
+local RandomProfileStoreScope2 = "Scope_" .. tostring(HttpService:GenerateGUID())
+
+local GameProfileStore1 = ProfileService.GetProfileStore(
+	{
+		Name = RandomProfileStoreKey1,
+		Scope = RandomProfileStoreScope1,
+	},
+	SETTINGS.ProfileTemplate1
+)
+
+local GameProfileStore2 = ProfileService.GetProfileStore(
+	{
+		Name = RandomProfileStoreKey2,
+		Scope = RandomProfileStoreScope2,
+	},
+	SETTINGS.ProfileTemplate2
+)
 
 local MockDataStore = ProfileService._mock_data_store -- For studio testing
 
@@ -111,11 +127,11 @@ end
 
 ----- Private functions -----
 
-local function MockUpdateAsync(mock_data_store, profile_store_name, key, transform_function)
-	local profile_store = mock_data_store[profile_store_name]
+local function MockUpdateAsync(mock_data_store, store_lookup, key, transform_function)
+	local profile_store = mock_data_store[store_lookup]
 	if profile_store == nil then
 		profile_store = {}
-		mock_data_store[profile_store_name] = profile_store
+		mock_data_store[store_lookup] = profile_store
 	end
 	local transform = transform_function(profile_store[key])
 	if transform == nil then
@@ -126,11 +142,16 @@ local function MockUpdateAsync(mock_data_store, profile_store_name, key, transfo
 	end
 end
 
-local function TestUpdateAsync(profile_store_name, key, transform_function)
+local function TestUpdateAsync(store_name, store_scope, key, transform_function)
 	if ProfileService._use_mock_data_store == true or ProfileTest.TEST_MOCK == true then
-		MockUpdateAsync(MockDataStore, profile_store_name, key, transform_function)
+		MockUpdateAsync(
+			MockDataStore,
+			store_name .. "\0" .. (store_scope or ""),
+			key,
+			transform_function
+		)
 	else
-		local data_store = DataStoreService:GetDataStore(profile_store_name)
+		local data_store = DataStoreService:GetDataStore(store_name, store_scope)
 		data_store:UpdateAsync(key, transform_function)
 	end
 end
@@ -342,7 +363,7 @@ coroutine.wrap(function()
 			corruption_signal_received = true
 		end
 	end)
-	TestUpdateAsync(RandomProfileStoreKey1, "Profile7", function() -- Injecting a faulty profile table
+	TestUpdateAsync(RandomProfileStoreKey1, RandomProfileStoreScope1, "Profile7", function() -- Injecting a faulty profile table
 		return {"ThisAintRight"}
 	end)
 	local profile7 = GameProfileStore1:LoadProfileAsync("Profile7", "ForceLoad")
@@ -354,7 +375,7 @@ coroutine.wrap(function()
 	profile8:ListenToRelease(function()
 		TestPass("ProfileService test #8", true)
 	end)
-	TestUpdateAsync(RandomProfileStoreKey1, "Profile8", function() -- Injecting profile table of an unreleased session
+	TestUpdateAsync(RandomProfileStoreKey1, RandomProfileStoreScope1, "Profile8", function() -- Injecting profile table of an unreleased session
 		return {
 			Data = {},
 			MetaData = {
@@ -374,7 +395,7 @@ coroutine.wrap(function()
 	profile9:ListenToRelease(function()
 		TestPass("ProfileService test #9", true)
 	end)
-	TestUpdateAsync(RandomProfileStoreKey1, "Profile9", function() -- Injecting profile table with force load request
+	TestUpdateAsync(RandomProfileStoreKey1, RandomProfileStoreScope1, "Profile9", function() -- Injecting profile table with force load request
 		return {
 			Data = {},
 			MetaData = {
@@ -391,7 +412,7 @@ coroutine.wrap(function()
 	-- Test #10: --
 	print("Test #10 begin... (This will take over a minute)")
 	local not_released_handler_test = false
-	TestUpdateAsync(RandomProfileStoreKey1, "Profile10", function() -- Injecting profile table of an unreleased session
+	TestUpdateAsync(RandomProfileStoreKey1, RandomProfileStoreScope1, "Profile10", function() -- Injecting profile table of an unreleased session
 		return {
 			Data = {},
 			MetaData = {
@@ -421,5 +442,3 @@ coroutine.wrap(function()
 	TestPass("ProfileService test #11", profile11.Data.Counter == 0 and profile11.Data.Array == false and type(profile11.Data.Dictionary) == "table")
 	
 end)()
-
-return ProfileTest
