@@ -1738,7 +1738,7 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 		error("[ProfileService]: ProfileStore name cannot be an empty string")
 	end
 	
-	if profile_store_scope ~= nil and type(profile_store_scope) ~= "string" or string.len(profile_store_scope) == 0 then
+	if profile_store_scope ~= nil and (type(profile_store_scope) ~= "string" or string.len(profile_store_scope) == 0) then
 		error("[ProfileService]: Invalid \"Scope\" parameter")
 	end
 
