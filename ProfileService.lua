@@ -35,14 +35,16 @@
 	
 	Functions:
 	
-		ProfileService.GetProfileStore(profile_store_name, profile_template) --> [ProfileStore]
-			-- WARNING: Only one ProfileStore can exist for a given profile_store_name in a game session!
-		
-		* Parameter description for "ProfileService.GetProfileStore()":
-		
-			profile_store_name   [string] -- DataStore name
-			profile_template     []:
-				{}                        [table] -- Profiles will default to given table (hard-copy) when no data was saved previously
+		ProfileService.GetProfileStore(profile_store_index, profile_template) --> [ProfileStore]
+			profile_store_index   [string] -- DataStore name
+			OR
+			profile_store_index   [table]: -- Allows the developer to define more GlobalDataStore variables
+				{
+					Name = "StoreName", -- [string] -- DataStore name
+					-- Optional arguments:
+					Scope = "StoreScope", -- [string] -- DataStore scope
+				}
+			profile_template      [table] -- Profiles will default to given table (hard-copy) when no data was saved previously
 				
 	Members [ProfileStore]:
 	
@@ -120,6 +122,9 @@
 			--	Wrap universe teleport requests with this method AFTER releasing the profile to improve session lock sharing between universe places;
 			--  :ListenToHopReady() will usually call the listener in around a second, but may ocassionally take up to 7 seconds when a release happens
 			--	next to an auto-update in regular usage scenarios.
+
+		Profile:Identify() --> [string] -- Returns a string containing DataStore name, scope and key; Used for debug;
+			-- Example return: "[Store:"GameData";Scope:"Live";Key:"Player_2312310"]"
 		
 		-- DANGEROUS METHODS - Will error if the profile is expired:
 		-- MetaTags - Save and read values stored in Profile.MetaData for storing info about the
@@ -266,61 +271,9 @@ local ProfileService = {
 
 	ServiceIssueCount = 0,
 
-	_active_profile_stores = {
-		--[[
-			{
-				_profile_store_name = "", -- [string] -- DataStore name
-				_profile_template = {} / nil, -- [table / nil]
-				_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
-				
-				_loaded_profiles = {
-					[profile_key] = {
-						Data = {}, -- [table] -- Loaded once after ProfileStore:LoadProfileAsync() finishes
-						MetaData = {}, -- [table] -- Updated with every auto-save
-						GlobalUpdates = {, -- [GlobalUpdates]
-							_updates_latest = {}, -- [table] {update_index, {{update_id, version_id, update_locked, update_data}, ...}}
-							_pending_update_lock = {update_id, ...} / nil, -- [table / nil]
-							_pending_update_clear = {update_id, ...} / nil, -- [table / nil]
-							
-							_new_active_update_listeners = {listener, ...} / nil, -- [table / nil]
-							_new_locked_update_listeners = {listener, ...} / nil, -- [table / nil]
-							
-							_profile = Profile / nil, -- [Profile / nil]
-							
-							_update_handler_mode = true / nil, -- [bool / nil]
-						}
-						
-						_profile_store = ProfileStore, -- [ProfileStore]
-						_profile_key = "", -- [string]
-						
-						_release_listeners = {listener, ...} / nil, -- [table / nil]
-						_hop_ready_listeners = {listener, ...} / nil, -- [table / nil]
-						_hop_ready = false,
-						
-						_view_mode = true / nil, -- [bool / nil]
-						
-						_load_timestamp = os.clock(),
-						
-						_is_user_mock = false, -- ProfileStore.Mock
-					},
-					...
-				},
-				_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
-				
-				_mock_loaded_profiles = {[profile_key] = Profile, ...},
-				_mock_profile_load_jobs = {[profile_key] = {load_id, loaded_data}, ...},
-				_is_pending = false, -- Waiting for live access check
-			},
-			...
-		--]]
-	},
+	_active_profile_stores = {}, -- {profile_store, ...}
 
-	_auto_save_list = { -- loaded profile table which will be circularly auto-saved
-		--[[
-			Profile,
-			...
-		--]]
-	},
+	_auto_save_list = {}, -- {profile, ...} -- loaded profile table which will be circularly auto-saved
 
 	_issue_queue = {}, -- [table] {issue_time, ...}
 	_critical_state_start = 0, -- [number] 0 = no critical state / os.clock() = critical state start
@@ -445,6 +398,15 @@ end
 
 ----- Private functions -----
 
+local function IdentifyProfile(store_name, store_scope, key)
+	return string.format(
+		"[Store:\"%s\";%sKey:\"%s\"]",
+		store_name,
+		store_scope ~= nil and string.format("Scope:\"%s\";", store_scope) or "",
+		key
+	)
+end
+
 local function CustomWriteQueueCleanup(store, key)
 	if CustomWriteQueue[store] ~= nil then
 		CustomWriteQueue[store][key] = nil
@@ -537,15 +499,15 @@ local function WaitForPendingProfileStore(profile_store)
 	end
 end
 
-local function RegisterIssue(error_message, profile_store_name, profile_key) -- Called when a DataStore API call errors
-	warn("[ProfileService]: DataStore API error (Store:\"" .. profile_store_name .. "\";Key:\"" .. profile_key .. "\") - \"" .. tostring(error_message) .. "\"")
+local function RegisterIssue(error_message, store_name, store_scope, profile_key) -- Called when a DataStore API call errors
+	warn("[ProfileService]: DataStore API error " .. IdentifyProfile(store_name, store_scope, profile_key) .. " - \"" .. tostring(error_message) .. "\"")
 	table.insert(IssueQueue, os.clock()) -- Adding issue time to queue
-	ProfileService.IssueSignal:Fire(tostring(error_message), profile_store_name, profile_key)
+	ProfileService.IssueSignal:Fire(tostring(error_message), store_name, profile_key)
 end
 
-local function RegisterCorruption(profile_store_name, profile_key) -- Called when a corrupted profile is loaded
-	warn("[ProfileService]: Resolved profile corruption (Store:\"" .. profile_store_name .. "\";Key:\"" .. profile_key .. "\")")
-	ProfileService.CorruptionSignal:Fire(profile_store_name, profile_key)
+local function RegisterCorruption(store_name, store_scope, profile_key) -- Called when a corrupted profile is loaded
+	warn("[ProfileService]: Resolved profile corruption " .. IdentifyProfile(store_name, store_scope, profile_key))
+	ProfileService.CorruptionSignal:Fire(store_name, profile_key)
 end
 
 local function MockUpdateAsync(mock_data_store, profile_store_name, key, transform_function)
@@ -647,30 +609,30 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 				return latest_data
 			end
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
-				loaded_data = MockUpdateAsync(UserMockDataStore, profile_store._profile_store_name, profile_key, transform_function)
+				loaded_data = MockUpdateAsync(UserMockDataStore, profile_store._profile_store_lookup, profile_key, transform_function)
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			elseif UseMockDataStore == true then -- Used when API access is disabled
-				loaded_data = MockUpdateAsync(MockDataStore, profile_store._profile_store_name, profile_key, transform_function)
+				loaded_data = MockUpdateAsync(MockDataStore, profile_store._profile_store_lookup, profile_key, transform_function)
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			else
 				loaded_data = CustomWriteQueueAsync(
 					function() -- Callback
 						return profile_store._global_data_store:UpdateAsync(profile_key, transform_function)
 					end,
-					profile_store._profile_store_name, -- Store
+					profile_store._profile_store_lookup, -- Store
 					profile_key -- Key
 				)
 			end
 		else
 			if is_user_mock == true then -- Used when the profile is accessed through ProfileStore.Mock
-				local mock_data_store = UserMockDataStore[profile_store._profile_store_name]
+				local mock_data_store = UserMockDataStore[profile_store._profile_store_lookup]
 				if mock_data_store ~= nil then
 					mock_data_store[profile_key] = nil
 				end
 				wipe_status = true
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			elseif UseMockDataStore == true then -- Used when API access is disabled
-				local mock_data_store = MockDataStore[profile_store._profile_store_name]
+				local mock_data_store = MockDataStore[profile_store._profile_store_lookup]
 				if mock_data_store ~= nil then
 					mock_data_store[profile_key] = nil
 				end
@@ -691,12 +653,21 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 	elseif success == true and type(loaded_data) == "table" then
 		-- Corruption handling:
 		if loaded_data.WasCorrupted == true then
-			RegisterCorruption(profile_store._profile_store_name, profile_key)
+			RegisterCorruption(
+				profile_store._profile_store_name,
+				profile_store._profile_store_scope,
+				profile_key
+			)
 		end
 		-- Return loaded_data:
 		return loaded_data
 	else
-		RegisterIssue((error_message ~= nil) and error_message or "Undefined error", profile_store._profile_store_name, profile_key)
+		RegisterIssue(
+			(error_message ~= nil) and error_message or "Undefined error",
+			profile_store._profile_store_name,
+			profile_store._profile_store_scope,
+			profile_key
+		)
 		-- Return nothing:
 		return nil
 	end
@@ -827,8 +798,12 @@ end
 
 local function SaveProfileAsync(profile, release_from_session)
 	if type(profile.Data) ~= "table" then
-		RegisterCorruption(profile._profile_store._profile_store_name, profile._profile_key)
-		error("[ProfileService]: PROFILE DATA CORRUPTED DURING RUNTIME! ProfileStore = \"" .. profile._profile_store._profile_store_name .. "\", Key = \"" .. profile._profile_key .. "\"")
+		RegisterCorruption(
+			profile._profile_store._profile_store_name,
+			profile._profile_store._profile_store_scope,
+			profile._profile_key
+		)
+		error("[ProfileService]: PROFILE DATA CORRUPTED DURING RUNTIME! Profile: " .. profile:Identify())
 	end
 	if release_from_session == true then
 		ReleaseProfileInternally(profile)
@@ -932,7 +907,7 @@ local function SaveProfileAsync(profile, release_from_session)
 					ReleaseProfileInternally(profile)
 				end
 				-- Cleanup reference in custom write queue:
-				CustomWriteQueueMarkForCleanup(profile._profile_store._profile_store_name, profile._profile_key)
+				CustomWriteQueueMarkForCleanup(profile._profile_store._profile_store_lookup, profile._profile_key)
 				-- Hop ready listeners:
 				if profile._hop_ready == false then
 					profile._hop_ready = true
@@ -1294,7 +1269,7 @@ function Profile:Save()
 	end
 	-- Reject save request if a save is already pending in the queue - this will prevent the user from
 	--	unecessary API request spam which we could not meaningfully execute anyways!
-	if IsCustomWriteQueueEmptyFor(self._profile_store._profile_store_name, self._profile_key) == true then
+	if IsCustomWriteQueueEmptyFor(self._profile_store._profile_store_lookup, self._profile_key) == true then
 		-- We don't want auto save to trigger too soon after manual saving - this will reset the auto save timer:
 		RemoveProfileFromAutoSave(self)
 		AddProfileToAutoSave(self)
@@ -1327,6 +1302,14 @@ function Profile:ListenToHopReady(listener) --> [ScriptConnection] ()
 	end
 end
 
+function Profile:Identify() --> [string]
+	return IdentifyProfile(
+		self._profile_store._profile_store_name,
+		self._profile_store._profile_store_scope,
+		self._profile_key
+	)
+end
+
 -- ProfileStore object:
 
 local ProfileStore = {
@@ -1334,6 +1317,9 @@ local ProfileStore = {
 		Mock = {},
 	
 		_profile_store_name = "", -- [string] -- DataStore name
+		_profile_store_scope = nil, -- [string] or [nil] -- DataStore scope
+		_profile_store_lookup = "", -- [string] -- _profile_store_name .. "\0" .. (_profile_store_scope or "")
+		
 		_profile_template = {}, -- [table]
 		_global_data_store = global_data_store, -- [GlobalDataStore] -- Object returned by DataStoreService:GetDataStore(_profile_store_name)
 		
@@ -1369,10 +1355,10 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 
 	-- Check if profile with profile_key isn't already loaded in this session:
 	for _, profile_store in ipairs(ActiveProfileStores) do
-		if profile_store._profile_store_name == self._profile_store_name then
+		if profile_store._profile_store_lookup == self._profile_store_lookup then
 			local loaded_profiles = is_user_mock == true and profile_store._mock_loaded_profiles or profile_store._loaded_profiles
 			if loaded_profiles[profile_key] ~= nil then
-				error("[ProfileService]: Profile of ProfileStore \"" .. self._profile_store_name .. "\" with key \"" .. profile_key .. "\" is already loaded in this session")
+				error("[ProfileService]: Profile " .. IdentifyProfile(self._profile_store_name, self._profile_store_scope, profile_key) .. " is already loaded in this session")
 				-- Are you using Profile:Release() properly?
 			end
 		end
@@ -1576,8 +1562,10 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 							aggressive_steal = true
 							Madwork.HeartbeatWait() -- Overload prevention
 						else
-							error("[ProfileService]: Invalid return from not_released_handler (\"" .. tostring(handler_result) .. "\")(" .. type(handler_result) .. ");" ..
-								"\n(Store:\"" .. self._profile_store_name .. "\";Key:\"" .. profile_key .. "\"); Traceback:\n" .. debug.traceback()
+							error(
+								"[ProfileService]: Invalid return from not_released_handler (\"" .. tostring(handler_result) .. "\")(" .. type(handler_result) .. ");" ..
+									"\n" .. IdentifyProfile(self._profile_store_name, self._profile_store_scope, profile_key) ..
+								" Traceback:\n" .. debug.traceback()
 							)
 						end
 					end
@@ -1628,7 +1616,7 @@ function ProfileStore:GlobalUpdateProfileAsync(profile_key, update_handler, _use
 			},
 			_use_mock == UseMockTag
 		)
-		CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
+		CustomWriteQueueMarkForCleanup(self._profile_store_lookup, profile_key)
 		-- Handling loaded_data:
 		if loaded_data ~= nil then
 			-- Return GlobalUpdates object (Update successful):
@@ -1667,7 +1655,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 			},
 			_use_mock == UseMockTag
 		)
-		CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
+		CustomWriteQueueMarkForCleanup(self._profile_store_lookup, profile_key)
 		-- Handle load_data:
 		if loaded_data ~= nil then
 			-- Create Profile object:
@@ -1718,19 +1706,40 @@ function ProfileStore:WipeProfileAsync(profile_key, _use_mock) --> is_wipe_succe
 		},
 		_use_mock == UseMockTag
 	)
-	
-	CustomWriteQueueMarkForCleanup(self._profile_store_name, profile_key)
-	
+
+	CustomWriteQueueMarkForCleanup(self._profile_store_lookup, profile_key)
+
 	return wipe_status
 end
 
 -- New ProfileStore:
 
-function ProfileService.GetProfileStore(profile_store_name, profile_template) --> [ProfileStore]
-	if type(profile_store_name) ~= "string" then
-		error("[ProfileService]: profile_store_name must be a string")
+function ProfileService.GetProfileStore(profile_store_index, profile_template) --> [ProfileStore]
+	
+	local profile_store_name
+	local profile_store_scope = nil
+	
+	-- Parsing profile_store_index:
+	if type(profile_store_index) == "string" then
+		-- profile_store_index as string:
+		profile_store_name = profile_store_index
+	elseif type(profile_store_index) == "table" then
+		-- profile_store_index as table:
+		profile_store_name = profile_store_index.Name
+		profile_store_scope = profile_store_index.Scope
+	else
+		error("[ProfileService]: Invalid or missing profile_store_index")
+	end
+	
+	-- Type checking:
+	if profile_store_name == nil or type(profile_store_name) ~= "string" then
+		error("[ProfileService]: Missing or invalid \"Name\" parameter")
 	elseif string.len(profile_store_name) == 0 then
-		error("[ProfileService]: Invalid profile_store_name")
+		error("[ProfileService]: ProfileStore name cannot be an empty string")
+	end
+	
+	if profile_store_scope ~= nil and type(profile_store_scope) ~= "string" or string.len(profile_store_scope) == 0 then
+		error("[ProfileService]: Invalid \"Scope\" parameter")
 	end
 
 	if type(profile_template) ~= "table" then
@@ -1755,6 +1764,9 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		},
 
 		_profile_store_name = profile_store_name,
+		_profile_store_scope = profile_store_scope,
+		_profile_store_lookup = profile_store_name .. "\0" .. (profile_store_scope or ""),
+		
 		_profile_template = profile_template,
 		_global_data_store = nil,
 		_loaded_profiles = {},
@@ -1763,21 +1775,23 @@ function ProfileService.GetProfileStore(profile_store_name, profile_template) --
 		_mock_profile_load_jobs = {},
 		_is_pending = false,
 	}
+	setmetatable(profile_store, ProfileStore)
+	
 	if IsLiveCheckActive == true then
 		profile_store._is_pending = true
 		coroutine.wrap(function()
 			WaitForLiveAccessCheck()
 			if UseMockDataStore == false then
-				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
 			end
 			profile_store._is_pending = false
 		end)()
 	else
 		if UseMockDataStore == false then
-			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name)
+			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
 		end
 	end
-	setmetatable(profile_store, ProfileStore)
+	
 	return profile_store
 end
 
@@ -1844,7 +1858,6 @@ RunService.Heartbeat:Connect(function()
 				AutoSaveIndex = 1
 			end
 			-- Perform save call:
-			-- print("[ProfileService]: Auto updating profile - profile_store_name = \"" .. profile._profile_store._profile_store_name .. "\"; profile_key = \"" .. profile._profile_key .. "\"")
 			if profile ~= nil then
 				coroutine.wrap(SaveProfileAsync)(profile) -- Auto save profile in new thread
 			end
