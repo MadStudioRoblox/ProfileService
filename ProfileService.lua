@@ -29,9 +29,9 @@
 	
 		ProfileService.ServiceLocked         [bool]
 		
-		ProfileService.IssueSignal           [ScriptSignal](error_message, profile_store_name, profile_key)
-		ProfileService.CorruptionSignal      [ScriptSignal](profile_store_name, profile_key)
-		ProfileService.CriticalStateSignal   [ScriptSignal](is_critical_state)
+		ProfileService.IssueSignal           [ScriptSignal] (error_message, profile_store_name, profile_key)
+		ProfileService.CorruptionSignal      [ScriptSignal] (profile_store_name, profile_key)
+		ProfileService.CriticalStateSignal   [ScriptSignal] (is_critical_state)
 	
 	Functions:
 	
@@ -100,6 +100,12 @@
 			Profile.MetaData.MetaTagsLatest      [table] (Read-only) -- Latest version of MetaData.MetaTags that was definetly saved to DataStore
 				(You can use Profile.MetaData.MetaTagsLatest for product purchase save confirmation, but create a system to clear old tags after
 				they pile up)
+
+		Profile.MetaTagsUpdated [ScriptSignal] (meta_tags_latest) -- Fires after every auto-save, after
+			--	Profile.MetaData.MetaTagsLatest has been updated with the version that's guaranteed to be saved;
+			--  .MetaTagsUpdated will fire regardless of whether .MetaTagsLatest changed after update;
+			--	.MetaTagsUpdated may fire after the Profile is released - changes to Profile.Data are not saved
+			--	after release.
 		
 		Profile.GlobalUpdates   [GlobalUpdates]
 		
@@ -170,62 +176,144 @@ local SETTINGS = {
 
 local Madwork -- Standalone Madwork reference for portable version of ProfileService
 do
-	-- ScriptConnection object:
-	local ScriptConnection = {
-		-- _listener = function -- [function]
-		-- _listener_table = {} -- [table] -- Table from which the function entry will be removed
-	}
+
+	local MadworkScriptSignal = {}
+	
+	local ScriptConnection = {}
 	
 	function ScriptConnection:Disconnect()
 		local listener = self._listener
 		if listener ~= nil then
-			local listener_table = self._listener_table
-			for i = 1, #listener_table do
-				if listener == listener_table[i] then
-					table.remove(listener_table, i)
-					break
+			local script_signal = self._script_signal
+			local fire_pointer_stack = script_signal._fire_pointer_stack
+			local listeners_next = script_signal._listeners_next
+			local listeners_back = script_signal._listeners_back
+			-- Check fire pointers:
+			for i = 1, script_signal._stack_count do
+				if fire_pointer_stack[i] == listener then
+					fire_pointer_stack[i] = listeners_next[listener]
+				end
+			end
+			-- Remove listener:
+			if script_signal._tail_listener == listener then
+				local new_tail = listeners_back[listener]
+				if new_tail ~= nil then
+					listeners_next[new_tail] = nil
+					listeners_back[listener] = nil
+				else
+					script_signal._head_listener = nil -- tail was also head
+				end
+				script_signal._tail_listener = new_tail
+			elseif script_signal._head_listener == listener then
+				-- If this listener is not the tail, assume another listener is the tail:
+				local new_head = listeners_next[listener]
+				listeners_back[new_head] = nil
+				listeners_next[listener] = nil
+				script_signal._head_listener = new_head
+			else
+				local next_listener = listeners_next[listener]
+				local back_listener = listeners_back[listener]
+				if next_listener ~= nil or back_listener ~= nil then -- Catch cases when duplicate listeners are disconnected
+					listeners_next[back_listener] = next_listener
+					listeners_back[next_listener] = back_listener
+					listeners_next[listener] = nil
+					listeners_back[listener] = nil
 				end
 			end
 			self._listener = nil
+			script_signal._listener_count -= 1
+		end
+		if self._disconnect_listener ~= nil then
+			self._disconnect_listener(self._disconnect_param)
+			self._disconnect_listener = nil
 		end
 	end
 	
-	function ScriptConnection.NewArrayScriptConnection(listener_table, listener) --> [ScriptConnection]
-		return {
-			_listener = listener,
-			_listener_table = listener_table,
-			Disconnect = ScriptConnection.Disconnect
-		}
-	end
+	local ScriptSignal = {}
 	
-	-- ScriptSignal object:
-	local ScriptSignal = {
-		-- _listeners = {}
-	}
-	
-	function ScriptSignal:Connect(listener) --> [ScriptConnection]
+	function ScriptSignal:Connect(listener, disconnect_listener, disconnect_param) --> [ScriptConnection]
 		if type(listener) ~= "function" then
-			error("[ScriptSignal]: Only functions can be passed to ScriptSignal:Connect()")
+			error("[MadworkScriptSignal]: Only functions can be passed to ScriptSignal:Connect()")
 		end
-		table.insert(self._listeners, listener)
+		local tail_listener = self._tail_listener
+		if tail_listener == nil then
+			self._head_listener = listener
+			self._tail_listener = listener
+			self._listener_count += 1
+		elseif tail_listener ~= listener and self._listeners_next[listener] == nil then -- Prevent connecting the same listener more than once
+			self._listeners_next[tail_listener] = listener
+			self._listeners_back[listener] = tail_listener
+			self._tail_listener = listener
+			self._listener_count += 1
+		end
 		return {
 			_listener = listener,
-			_listener_table = self._listeners,
+			_script_signal = self,
+			_disconnect_listener = disconnect_listener,
+			_disconnect_param = disconnect_param,
 			Disconnect = ScriptConnection.Disconnect
 		}
+	end
+	
+	function ScriptSignal:GetListenerCount()
+		return self._listener_count
 	end
 	
 	function ScriptSignal:Fire(...)
-		for _, listener in ipairs(self._listeners) do
-			listener(...)
+		local fire_pointer_stack = self._fire_pointer_stack
+		local stack_id = self._stack_count + 1
+		self._stack_count = stack_id
+		
+		local listeners_next = self._listeners_next
+		fire_pointer_stack[stack_id] = self._head_listener
+		while true do
+			local pointer = fire_pointer_stack[stack_id]
+			fire_pointer_stack[stack_id] = listeners_next[pointer]
+			if pointer ~= nil then
+				coroutine.wrap(pointer)(...)
+			else
+				break
+			end
 		end
+		self._stack_count -= 1
+	end
+
+	function ScriptSignal:FireUntil(continue_callback, ...)
+		local fire_pointer_stack = self._fire_pointer_stack
+		local stack_id = self._stack_count + 1
+		self._stack_count = stack_id
+	
+		local listeners_next = self._listeners_next
+		fire_pointer_stack[stack_id] = self._head_listener
+		while true do
+			local pointer = fire_pointer_stack[stack_id]
+			fire_pointer_stack[stack_id] = listeners_next[pointer]
+			if pointer ~= nil then
+				coroutine.wrap(pointer)(...)
+				if continue_callback() ~= true then
+					fire_pointer_stack[stack_id] = nil
+					break
+				end
+			else
+				break
+			end
+		end
+		self._stack_count -= 1
 	end
 	
-	function ScriptSignal.NewScriptSignal() --> [ScriptSignal]
+	function MadworkScriptSignal.NewScriptSignal() --> [ScriptSignal]
 		return {
-			_listeners = {},
+			_fire_pointer_stack = {},
+			_stack_count = 0,
+			_listener_count = 0,
+			_listeners_next = {},
+			_listeners_back = {},
+			_head_listener = nil,
+			_tail_listener = nil,
 			Connect = ScriptSignal.Connect,
-			Fire = ScriptSignal.Fire
+			GetListenerCount = ScriptSignal.GetListenerCount,
+			Fire = ScriptSignal.Fire,
+			FireUntil = ScriptSignal.FireUntil,
 		}
 	end
 	
@@ -233,8 +321,7 @@ do
 	local Heartbeat = RunService.Heartbeat
 	
 	Madwork = {
-		NewScriptSignal = ScriptSignal.NewScriptSignal,
-		NewArrayScriptConnection = ScriptConnection.NewArrayScriptConnection,
+		NewScriptSignal = MadworkScriptSignal.NewScriptSignal,
 		HeartbeatWait = function(wait_time) --> time_elapsed
 			if wait_time == nil or wait_time == 0 then
 				return Heartbeat:Wait()
@@ -719,10 +806,7 @@ local function ReleaseProfileInternally(profile)
 		place_id = active_session[1]
 		game_job_id = active_session[2]
 	end
-	for _, listener in ipairs(profile._release_listeners) do
-		coroutine.wrap(listener)(place_id, game_job_id)
-	end
-	profile._release_listeners = {}
+	profile._release_listeners:Fire(place_id, game_job_id)
 end
 
 local function CheckForNewGlobalUpdates(profile, old_global_updates_data, new_global_updates_data)
@@ -757,9 +841,7 @@ local function CheckForNewGlobalUpdates(profile, old_global_updates_data, new_gl
 				end
 				if is_pending_lock == false then
 					-- Trigger new active update listeners:
-					for _, listener in ipairs(global_updates_object._new_active_update_listeners) do
-						listener(new_global_update[1], new_global_update[4])
-					end
+					global_updates_object._new_active_update_listeners:Fire(new_global_update[1], new_global_update[4])
 				end
 			end
 			-- Locked global updates:
@@ -774,22 +856,18 @@ local function CheckForNewGlobalUpdates(profile, old_global_updates_data, new_gl
 				end
 				if is_pending_clear == false then
 					-- Trigger new locked update listeners:
-					for _, listener in ipairs(global_updates_object._new_locked_update_listeners) do
-						listener(new_global_update[1], new_global_update[4])
-						-- Check if listener marked the update to be cleared:
-						-- Normally there should be only one listener per profile for new locked global updates, but
-						-- in case several listeners are connected we will not trigger more listeners after one listener
-						-- marks the locked global update to be cleared.
-						for _, update_id in ipairs(pending_update_clear) do
-							if new_global_update[1] == update_id then
-								is_pending_clear = true
-								break
-							end
-						end
-						if is_pending_clear == true then
-							break
-						end
-					end
+
+					global_updates_object._new_locked_update_listeners:FireUntil(
+						function()
+							-- Check if listener marked the update to be cleared:
+							-- Normally there should be only one listener per profile for new locked global updates, but
+							-- in case several listeners are connected we will not trigger more listeners after one listener
+							-- marks the locked global update to be cleared.
+							return table.find(pending_update_clear, new_global_update[1]) == nil
+						end,
+						new_global_update[1], new_global_update[4]
+					)
+
 				end
 			end
 		end
@@ -911,11 +989,11 @@ local function SaveProfileAsync(profile, release_from_session)
 				-- Hop ready listeners:
 				if profile._hop_ready == false then
 					profile._hop_ready = true
-					for _, listener in ipairs(profile._hop_ready_listeners) do
-						coroutine.wrap(listener)()
-					end
+					profile._hop_ready_listeners:Fire()
 				end
 			end
+			-- Signaling MetaTagsUpdated listeners after a possible external profile release was handled:
+			profile.MetaTagsUpdated:Fire(profile.MetaData.MetaTagsLatest)
 		elseif repeat_save_flag == true then
 			Madwork.HeartbeatWait() -- Prevent infinite loop in case DataStore API does not yield
 		end
@@ -933,8 +1011,8 @@ local GlobalUpdates = {
 		_pending_update_lock = {update_id, ...} / nil, -- [table / nil]
 		_pending_update_clear = {update_id, ...} / nil, -- [table / nil]
 		
-		_new_active_update_listeners = {listener, ...} / nil, -- [table / nil]
-		_new_locked_update_listeners = {listener, ...} / nil, -- [table / nil]
+		_new_active_update_listeners = [ScriptSignal] / nil, -- [table / nil]
+		_new_locked_update_listeners = [ScriptSignal] / nil, -- [table / nil]
 		
 		_profile = Profile / nil, -- [Profile / nil]
 		
@@ -1002,8 +1080,7 @@ function GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection] 
 		}
 	end
 	-- Connect listener:
-	table.insert(self._new_active_update_listeners, listener)
-	return Madwork.NewArrayScriptConnection(self._new_active_update_listeners, listener)
+	return self._new_active_update_listeners:Connect(listener)
 end
 
 function GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] listener(update_id, update_data)
@@ -1021,8 +1098,7 @@ function GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] 
 		}
 	end
 	-- Connect listener:
-	table.insert(self._new_locked_update_listeners, listener)
-	return Madwork.NewArrayScriptConnection(self._new_locked_update_listeners, listener)
+	return self._new_locked_update_listeners:Connect(listener)
 end
 
 function GlobalUpdates:LockActiveUpdate(update_id)
@@ -1188,8 +1264,8 @@ local Profile = {
 		_profile_store = ProfileStore, -- [ProfileStore]
 		_profile_key = "", -- [string]
 		
-		_release_listeners = {listener, ...} / nil, -- [table / nil]
-		_hop_ready_listeners = {listener, ...} / nil, -- [table / nil]
+		_release_listeners = [ScriptSignal] / nil, -- [table / nil]
+		_hop_ready_listeners = [ScriptSignal] / nil, -- [table / nil]
 		_hop_ready = false,
 		
 		_view_mode = true / nil, -- [bool / nil]
@@ -1255,8 +1331,7 @@ function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / ni
 			Disconnect = function() end,
 		}
 	else
-		table.insert(self._release_listeners, listener)
-		return Madwork.NewArrayScriptConnection(self._release_listeners, listener)
+		return self._release_listeners:Connect(listener)
 	end
 end
 
@@ -1296,9 +1371,11 @@ function Profile:ListenToHopReady(listener) --> [ScriptConnection] ()
 	end
 	if self._hop_ready == true then
 		coroutine.wrap(listener)()
+		return {
+			Disconnect = function() end,
+		}
 	else
-		table.insert(self._hop_ready_listeners, listener)
-		return Madwork.NewArrayScriptConnection(self._hop_ready_listeners, listener)
+		return self._hop_ready_listeners:Connect(listener)
 	end
 end
 
@@ -1480,8 +1557,8 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 						_pending_update_lock = {},
 						_pending_update_clear = {},
 
-						_new_active_update_listeners = {},
-						_new_locked_update_listeners = {},
+						_new_active_update_listeners = Madwork.NewScriptSignal(),
+						_new_locked_update_listeners = Madwork.NewScriptSignal(),
 
 						_profile = nil,
 					}
@@ -1489,13 +1566,14 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 					local profile = {
 						Data = loaded_data.Data,
 						MetaData = loaded_data.MetaData,
+						MetaTagsUpdated = Madwork.NewScriptSignal(),
 						GlobalUpdates = global_updates_object,
 
 						_profile_store = self,
 						_profile_key = profile_key,
 
-						_release_listeners = {},
-						_hop_ready_listeners = {},
+						_release_listeners = Madwork.NewScriptSignal(),
+						_hop_ready_listeners = Madwork.NewScriptSignal(),
 						_hop_ready = false,
 
 						_load_timestamp = os.clock(),
@@ -1667,6 +1745,7 @@ function ProfileStore:ViewProfileAsync(profile_key, _use_mock) --> [Profile / ni
 			local profile = {
 				Data = loaded_data.Data,
 				MetaData = loaded_data.MetaData,
+				MetaTagsUpdated = Madwork.NewScriptSignal(),
 				GlobalUpdates = global_updates_object,
 
 				_profile_store = self,

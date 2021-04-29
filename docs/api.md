@@ -154,7 +154,7 @@ ProfileStore:GlobalUpdateProfileAsync(
 !!! failure "Yielding inside the `update_handler` function will throw an error"
 
 !!! failure "Avoid rapid use of ProfileStore:GlobalUpdateProfileAsync()"
-    Excessive use of [ProfileStore:GlobalUpdateProfileAsync()](/ProfileService/api/#profilestoreglobalupdateprofileasync) can lead to dead session locks and event lost
+    Excessive use of [ProfileStore:GlobalUpdateProfileAsync()](#profilestoreglobalupdateprofileasync) can lead to dead session locks and event lost
     `Profile.Data` (latter is mostly possible only if the `Profile` is loaded in the same session as `:GlobalUpdateProfileAsync()` is called). This is due to a queue
     system that executes every write request for the `Profile` every 7 seconds - if this queue grows larger than the [BindToClose timeout](https://developer.roblox.com/en-us/api-reference/function/DataModel/BindToClose) (approx. 30 seconds), some requests in the queue can be lost after the game shuts down.
 
@@ -254,6 +254,15 @@ Profile.MetaData.MetaTagsLatest [table] (Read-only)
 
 `Profile.MetaData` is a table containing data about the profile itself. `Profile.MetaData.MetaTags` is saved
 on the same DataStore key together with `Profile.Data`.
+
+### Profile.MetaTagsUpdated
+```lua
+Profile.MetaTagsUpdated [ScriptSignal] (meta_tags_latest)
+```
+
+This signal fires after every auto-save, after `Profile.MetaData.MetaTagsLatest` has been updated with the version that's guaranteed to be saved. `MetaTagsUpdated` will fire regardless of whether `MetaTagsLatest` changed after update. **`MetaTagsUpdated` may fire after the Profile is released** - changes to Profile.Data are not saved after release!
+
+`MetaTagsUpdated` example use can be found in the [Developer Products example code](/ProfileService/tutorial/developer_products/).
 
 ### Profile.GlobalUpdates
 ``` lua

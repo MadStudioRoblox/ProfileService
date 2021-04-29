@@ -17,6 +17,12 @@
 				"$properties": {
 					"Disabled": true
 				}
+			},
+			"DeveloperProductExample": {
+				"$path": "Examples/DeveloperProductExample.server.lua",
+				"$properties": {
+					"Disabled": true
+				}
 			}
 		}
  	}

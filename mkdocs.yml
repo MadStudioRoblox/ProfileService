@@ -18,6 +18,7 @@ nav:
   - Tutorial:
     - Setting up: tutorial/settingup.md
     - Basic Usage: tutorial/basic_usage.md
+    - Developer Products: tutorial/developer_products.md
   - Troubleshooting: troubleshooting.md
   - API: api.md
 
