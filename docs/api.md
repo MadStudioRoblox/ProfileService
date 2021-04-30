@@ -260,7 +260,9 @@ on the same DataStore key together with `Profile.Data`.
 Profile.MetaTagsUpdated [ScriptSignal] (meta_tags_latest)
 ```
 
-This signal fires after every auto-save, after `Profile.MetaData.MetaTagsLatest` has been updated with the version that's guaranteed to be saved. `MetaTagsUpdated` will fire regardless of whether `MetaTagsLatest` changed after update. **`MetaTagsUpdated` may fire after the Profile is released** - changes to Profile.Data are not saved after release!
+This signal fires after every auto-save, after `Profile.MetaData.MetaTagsLatest` has been updated with the version that's guaranteed to be saved. `MetaTagsUpdated` will fire regardless of whether `MetaTagsLatest` changed after update.
+
+**`MetaTagsUpdated` will also fire after the Profile is saved for the last time and released**. Remember that changes to `Profile.Data` will not be saved after release - `Profile:IsActive()` will return `false` if the profile is released.
 
 `MetaTagsUpdated` example use can be found in the [Developer Products example code](/ProfileService/tutorial/developer_products/).
 
