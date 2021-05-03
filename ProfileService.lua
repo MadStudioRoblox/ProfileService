@@ -961,10 +961,12 @@ local function SaveProfileAsync(profile, release_from_session)
 			local new_global_updates_data = loaded_data.GlobalUpdates
 			global_updates_object._updates_latest = new_global_updates_data
 			-- Setting MetaData:
-			local keep_session_meta_tag_reference = profile.MetaData.MetaTags
-			profile.MetaData = loaded_data.MetaData
-			profile.MetaData.MetaTagsLatest = profile.MetaData.MetaTags
-			profile.MetaData.MetaTags = keep_session_meta_tag_reference
+			for key, value in pairs(loaded_data.MetaData) do
+				if key ~= "MetaTags" then
+					profile.MetaData[key] = value
+				end
+			end
+			profile.MetaData.MetaTagsLatest = loaded_data.MetaData.MetaTags
 			-- 5) Check if session still owns the profile: --
 			local active_session = loaded_data.MetaData.ActiveSession
 			local session_load_count = loaded_data.MetaData.SessionLoadCount
