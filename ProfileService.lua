@@ -161,16 +161,24 @@
 --]]
 
 local SETTINGS = {
-	
+
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
 	RobloxWriteCooldown = 7, -- Seconds between successive DataStore calls for the same key
-	ForceLoadMaxSteps = 4, -- Steps taken before ForceLoad request steals the active session for a profile
+	ForceLoadMaxSteps = 8, -- Steps taken before ForceLoad request steals the active session for a profile
 	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
-	-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
+		-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
 	
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
 	CriticalStateLast = 120, -- Seconds
+	
+	MetaTagsUpdatedValues = { -- Technical stuff - do not alter
+		ProfileCreateTime = true,
+		SessionLoadCount = true,
+		ActiveSession = true,
+		ForceLoadSession = true,
+		LastUpdate = true,
+	}
 	
 }
 
@@ -961,12 +969,12 @@ local function SaveProfileAsync(profile, release_from_session)
 			local new_global_updates_data = loaded_data.GlobalUpdates
 			global_updates_object._updates_latest = new_global_updates_data
 			-- Setting MetaData:
-			for key, value in pairs(loaded_data.MetaData) do
-				if key ~= "MetaTags" then
-					profile.MetaData[key] = value
-				end
+			local session_meta_data = profile.MetaData
+			local latest_meta_data = loaded_data.MetaData
+			for key in pairs(SETTINGS.MetaTagsUpdatedValues) do
+				session_meta_data[key] = latest_meta_data[key]
 			end
-			profile.MetaData.MetaTagsLatest = loaded_data.MetaData.MetaTags
+			session_meta_data.MetaTagsLatest = latest_meta_data.MetaTags
 			-- 5) Check if session still owns the profile: --
 			local active_session = loaded_data.MetaData.ActiveSession
 			local session_load_count = loaded_data.MetaData.SessionLoadCount
