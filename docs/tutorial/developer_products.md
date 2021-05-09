@@ -105,19 +105,18 @@ function PurchaseIdCheckAsync(profile, purchase_id, grant_product_callback) --> 
 		
 		check_latest_meta_tags()
 		
-		local release_connection = profile:ListenToRelease(function()
-			result = result or Enum.ProductPurchaseDecision.NotProcessedYet
-		end)
-		
 		local meta_tags_connection = profile.MetaTagsUpdated:Connect(function()
 			check_latest_meta_tags()
+			-- When MetaTagsUpdated fires after profile release:
+			if profile:IsActive() == false and result == nil then
+				result = Enum.ProductPurchaseDecision.NotProcessedYet
+			end
 		end)
 		
 		while result == nil do
 			RunService.Heartbeat:Wait()
 		end
 		
-		release_connection:Disconnect()
 		meta_tags_connection:Disconnect()
 		
 		return result
