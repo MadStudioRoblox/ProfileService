@@ -734,12 +734,8 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 				wipe_status = true
 				Madwork.HeartbeatWait() -- Simulate API call yield
 			else
-				loaded_data = profile_store._global_data_store:UpdateAsync(profile_key, function()
-					return "PROFILE_WIPED" -- It's impossible to set DataStore keys to nil after they have been set
-				end)
-				if loaded_data == "PROFILE_WIPED" then
-					wipe_status = true
-				end
+				profile_store._global_data_store:RemoveAsync(profile_key)
+				wipe_status = true
 			end
 		end
 	end)
