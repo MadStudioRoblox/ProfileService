@@ -161,17 +161,18 @@
 --]]
 
 local SETTINGS = {
-
+	
+	ToggleWarningMessages = true, -- Should ProfileService warn of any data store related issues? Recommended to be set to true
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
 	RobloxWriteCooldown = 7, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 8, -- Steps taken before ForceLoad request steals the active session for a profile
 	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
-		-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
-	
+	-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
+
 	IssueCountForCriticalState = 5, -- Issues to collect to announce critical state
 	IssueLast = 120, -- Seconds
 	CriticalStateLast = 120, -- Seconds
-	
+
 	MetaTagsUpdatedValues = { -- Technical stuff - do not alter
 		ProfileCreateTime = true,
 		SessionLoadCount = true,
@@ -179,16 +180,16 @@ local SETTINGS = {
 		ForceLoadSession = true,
 		LastUpdate = true,
 	}
-	
+
 }
 
 local Madwork -- Standalone Madwork reference for portable version of ProfileService
 do
 
 	local MadworkScriptSignal = {}
-	
+
 	local ScriptConnection = {}
-	
+
 	function ScriptConnection:Disconnect()
 		local listener = self._listener
 		if listener ~= nil then
@@ -236,9 +237,9 @@ do
 			self._disconnect_listener = nil
 		end
 	end
-	
+
 	local ScriptSignal = {}
-	
+
 	function ScriptSignal:Connect(listener, disconnect_listener, disconnect_param) --> [ScriptConnection]
 		if type(listener) ~= "function" then
 			error("[MadworkScriptSignal]: Only functions can be passed to ScriptSignal:Connect()")
@@ -262,16 +263,16 @@ do
 			Disconnect = ScriptConnection.Disconnect
 		}
 	end
-	
+
 	function ScriptSignal:GetListenerCount()
 		return self._listener_count
 	end
-	
+
 	function ScriptSignal:Fire(...)
 		local fire_pointer_stack = self._fire_pointer_stack
 		local stack_id = self._stack_count + 1
 		self._stack_count = stack_id
-		
+
 		local listeners_next = self._listeners_next
 		fire_pointer_stack[stack_id] = self._head_listener
 		while true do
@@ -290,7 +291,7 @@ do
 		local fire_pointer_stack = self._fire_pointer_stack
 		local stack_id = self._stack_count + 1
 		self._stack_count = stack_id
-	
+
 		local listeners_next = self._listeners_next
 		fire_pointer_stack[stack_id] = self._head_listener
 		while true do
@@ -308,7 +309,7 @@ do
 		end
 		self._stack_count -= 1
 	end
-	
+
 	function MadworkScriptSignal.NewScriptSignal() --> [ScriptSignal]
 		return {
 			_fire_pointer_stack = {},
@@ -324,10 +325,10 @@ do
 			FireUntil = ScriptSignal.FireUntil,
 		}
 	end
-	
+
 	local RunService = game:GetService("RunService")
 	local Heartbeat = RunService.Heartbeat
-	
+
 	Madwork = {
 		NewScriptSignal = MadworkScriptSignal.NewScriptSignal,
 		HeartbeatWait = function(wait_time) --> time_elapsed
@@ -463,6 +464,14 @@ local CustomWriteQueue = {
 
 ----- Utils -----
 
+local function Debug(msg)
+	if not SETTINGS.ToggleWarningMessages then
+		return
+	end
+	
+	warn(msg)
+end
+
 local function DeepCopyTable(t)
 	local copy = {}
 	for key, value in pairs(t) do
@@ -595,13 +604,13 @@ local function WaitForPendingProfileStore(profile_store)
 end
 
 local function RegisterIssue(error_message, store_name, store_scope, profile_key) -- Called when a DataStore API call errors
-	warn("[ProfileService]: DataStore API error " .. IdentifyProfile(store_name, store_scope, profile_key) .. " - \"" .. tostring(error_message) .. "\"")
+	Debug("[ProfileService]: DataStore API error " .. IdentifyProfile(store_name, store_scope, profile_key) .. " - \"" .. tostring(error_message) .. "\"")
 	table.insert(IssueQueue, os.clock()) -- Adding issue time to queue
 	ProfileService.IssueSignal:Fire(tostring(error_message), store_name, profile_key)
 end
 
 local function RegisterCorruption(store_name, store_scope, profile_key) -- Called when a corrupted profile is loaded
-	warn("[ProfileService]: Resolved profile corruption " .. IdentifyProfile(store_name, store_scope, profile_key))
+	Debug("[ProfileService]: Resolved profile corruption " .. IdentifyProfile(store_name, store_scope, profile_key))
 	ProfileService.CorruptionSignal:Fire(store_name, profile_key)
 end
 
@@ -1653,7 +1662,7 @@ function ProfileStore:LoadProfileAsync(profile_key, not_released_handler, _use_m
 							error(
 								"[ProfileService]: Invalid return from not_released_handler (\"" .. tostring(handler_result) .. "\")(" .. type(handler_result) .. ");" ..
 									"\n" .. IdentifyProfile(self._profile_store_name, self._profile_store_scope, profile_key) ..
-								" Traceback:\n" .. debug.traceback()
+									" Traceback:\n" .. debug.traceback()
 							)
 						end
 					end
@@ -1804,10 +1813,10 @@ end
 -- New ProfileStore:
 
 function ProfileService.GetProfileStore(profile_store_index, profile_template) --> [ProfileStore]
-	
+
 	local profile_store_name
 	local profile_store_scope = nil
-	
+
 	-- Parsing profile_store_index:
 	if type(profile_store_index) == "string" then
 		-- profile_store_index as string:
@@ -1819,14 +1828,14 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 	else
 		error("[ProfileService]: Invalid or missing profile_store_index")
 	end
-	
+
 	-- Type checking:
 	if profile_store_name == nil or type(profile_store_name) ~= "string" then
 		error("[ProfileService]: Missing or invalid \"Name\" parameter")
 	elseif string.len(profile_store_name) == 0 then
 		error("[ProfileService]: ProfileStore name cannot be an empty string")
 	end
-	
+
 	if profile_store_scope ~= nil and (type(profile_store_scope) ~= "string" or string.len(profile_store_scope) == 0) then
 		error("[ProfileService]: Invalid \"Scope\" parameter")
 	end
@@ -1855,7 +1864,7 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 		_profile_store_name = profile_store_name,
 		_profile_store_scope = profile_store_scope,
 		_profile_store_lookup = profile_store_name .. "\0" .. (profile_store_scope or ""),
-		
+
 		_profile_template = profile_template,
 		_global_data_store = nil,
 		_loaded_profiles = {},
@@ -1865,7 +1874,7 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 		_is_pending = false,
 	}
 	setmetatable(profile_store, ProfileStore)
-	
+
 	if IsLiveCheckActive == true then
 		profile_store._is_pending = true
 		coroutine.wrap(function()
@@ -1880,7 +1889,7 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
 		end
 	end
-	
+
 	return profile_store
 end
 
@@ -1895,7 +1904,7 @@ if IsStudio == true then
 		end)
 		local no_internet_access = status == false and string.find(message, "ConnectFail", 1, true) ~= nil
 		if no_internet_access == true then
-			warn("[ProfileService]: No internet access - check your network connection")
+			Debug("[ProfileService]: No internet access - check your network connection")
 		end
 		if status == false and
 			(string.find(message, "403", 1, true) ~= nil or -- Cannot write to DataStore from studio if API access is not enabled
@@ -1904,9 +1913,9 @@ if IsStudio == true then
 
 			UseMockDataStore = true
 			ProfileService._use_mock_data_store = true
-			print("[ProfileService]: Roblox API services unavailable - data will not be saved")
+			Debug("[ProfileService]: Roblox API services unavailable - data will not be saved")
 		else
-			print("[ProfileService]: Roblox API services available - data will be saved")
+			Debug("[ProfileService]: Roblox API services available - data will be saved")
 		end
 		IsLiveCheckActive = false
 	end)()
@@ -1959,7 +1968,7 @@ RunService.Heartbeat:Connect(function()
 			ProfileService.CriticalState = true
 			ProfileService.CriticalStateSignal:Fire(true)
 			CriticalStateStart = os.clock()
-			warn("[ProfileService]: Entered critical state")
+			Debug("[ProfileService]: Entered critical state")
 		end
 	else
 		if #IssueQueue >= SETTINGS.IssueCountForCriticalState then
@@ -1967,7 +1976,7 @@ RunService.Heartbeat:Connect(function()
 		elseif os.clock() - CriticalStateStart > SETTINGS.CriticalStateLast then
 			ProfileService.CriticalState = false
 			ProfileService.CriticalStateSignal:Fire(false)
-			warn("[ProfileService]: Critical state ended")
+			Debug("[ProfileService]: Critical state ended")
 		end
 	end
 	-- Issue queue:
