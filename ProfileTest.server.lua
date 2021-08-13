@@ -137,8 +137,23 @@ local function MockUpdateAsync(mock_data_store, store_lookup, key, transform_fun
 	if transform == nil then
 		return nil
 	else
-		profile_store[key] = DeepCopyTable(transform)
-		return DeepCopyTable(profile_store[key])
+		local epoch_time = math.floor(os.time() * 1000)
+		local mock_entry = profile_store[key]
+		if mock_entry == nil then
+			mock_entry = {
+				Data = nil,
+				CreatedTime = epoch_time,
+				UpdatedTime = epoch_time,
+				VersionId = 0,
+				UserIds = {},
+				MetaData = {},
+			}
+			profile_store[key] = mock_entry
+		end
+		mock_entry.UpdatedTime = epoch_time
+		mock_entry.VersionId += 1
+		mock_entry.Data = DeepCopyTable(transform)
+		return DeepCopyTable(mock_entry.Data)
 	end
 end
 
@@ -184,6 +199,215 @@ coroutine.wrap(function()
 		5) Test errors
 		6) Test load yoinks
 	--]]
+
+	local live_mode = ProfileService.IsLive()
+
+	-- Versioning test:
+
+	if live_mode == true then
+
+		print("Running versioning test... (Can take a few minutes)")
+
+		-- Creating several versions for the same key:
+
+		local profile = GameProfileStore1:LoadProfileAsync("VersioningTest")
+		profile.Data.Gold = 10
+		profile:Release()
+
+		local payload = GameProfileStore1:ViewProfileAsync("VersioningTest")
+		for i = 1, 3 do
+			payload.Data.Gold += 10
+			payload:OverwriteAsync()
+		end
+
+		-- There should be 5 versions for this key in total:
+
+		local query = GameProfileStore1:ProfileVersionQuery(
+			"VersioningTest",
+			Enum.SortDirection.Descending,
+			nil,
+			DateTime.fromUnixTimestamp(os.time() + 10000) -- Future time
+		  )
+		local query_results = {}
+		local pending_tasks = 0
+
+		for i = 1, 6 do
+			pending_tasks += 1
+			task.spawn(function()
+			  local result = query:NextAsync()
+			  if result ~= nil then
+				if i == 6 then
+					error("6 entries found when there should be only 5 (might be an order of query returns problem)")
+				end
+				table.insert(query_results, result)
+			  end
+			  pending_tasks -= 1
+			end)
+		end
+
+		while pending_tasks > 0 do
+			task.wait()
+		end
+
+		local expecting_values = {0, 10, 20, 30, 40}
+
+		for _, entry in ipairs(query_results) do
+			local index = table.find(expecting_values, entry.Data.Gold or 0)
+			if index ~= nil then
+				table.remove(expecting_values, index)
+			end
+		end
+
+		for i = 1, 10 do
+			task.wait() -- Wait a few frames for the query queue to resolve
+		end
+
+		if #query._query_queue > 0 then
+			error("Version query queue leak detected")
+		end
+
+		TestPass("ProfileService versioning test", #expecting_values == 0)
+
+	else
+		print("Versioning test not supported in mock mode")
+	end
+
+	-- Test profile payloads:
+
+	do
+
+		print("Running payload test... (Can take a few minutes)")
+
+		-- Create profile with some data and an active global update:
+		
+		local profile = GameProfileStore1:LoadProfileAsync("PayloadTest")
+		profile.Data = {
+			Coins = 68,
+		}
+		profile:AddUserId(2312310)
+		profile:SetMetaTag("Version", 1)
+		profile.RobloxMetaData = {Playtime = 123456}
+		
+		GameProfileStore1:GlobalUpdateProfileAsync("PayloadTest",
+			function(global_updates)
+				global_updates:AddActiveUpdate({GiftType = "SpecialGift"})
+			end
+		)
+
+		-- We need the profile to be active, and ensure all above data is saved in the DataStore:
+
+		local wait_for_profile = true
+		profile.KeyInfoUpdated:Connect(function()
+			wait_for_profile = false
+		end)
+		while wait_for_profile == true do wait() end
+
+		if #profile.GlobalUpdates:GetActiveUpdates() == 0 then
+			error("Global update was not received")
+		end
+
+		-- Create a profile payload:
+
+		profile.Coins = 1000000 -- The player JUST received tons of cash!!! Payloads can lose up to
+			-- several minutes of in-game progress when overwriting. You should use :LoadProfileAsync()
+			-- If you want to protect in-game progress.
+
+		local payload = GameProfileStore1:ViewProfileAsync("PayloadTest")
+		payload.Data.Coins += 1
+		payload:AddUserId(50)
+
+		local active_update_check = payload.GlobalUpdates:GetActiveUpdates()[1]
+		active_update_check = active_update_check and active_update_check[2]
+		active_update_check = active_update_check and active_update_check.GiftType
+
+		if active_update_check ~= "SpecialGift" then
+			error("Global update was not received in the viewed profile")
+		end
+
+		payload:ClearGlobalUpdates()
+
+		if #payload.GlobalUpdates:GetActiveUpdates() ~= 0 then
+			error("Global updates could not be cleared")
+		end
+
+		payload:OverwriteAsync()
+
+		-- The profile should lose its session lock:
+
+		local start_time = os.clock()
+		wait_for_profile = true
+		profile:ListenToHopReady(function()
+			wait_for_profile = false
+		end)
+		while wait_for_profile == true do
+			if os.clock() - start_time > 240 then
+				error("Session steal by payload timeout")
+			end
+			wait()
+		end
+
+		if profile:IsActive() == true then
+			error("Faulty :IsActive()")
+		end
+
+		-- Load and check new data:
+
+		profile = GameProfileStore1:LoadProfileAsync("PayloadTest")
+
+		local key_info = profile.KeyInfo
+		local metadata = key_info:GetMetadata()
+		local user_ids = key_info:GetUserIds()
+
+		local is_passed = profile.Data.Coins == 69
+			and metadata.Playtime == 123456 and table.find(user_ids, 2312310) ~= nil
+			and table.find(user_ids, 50) ~= nil and #profile.GlobalUpdates:GetActiveUpdates() == 0
+
+		TestPass("ProfileService payload test", is_passed)
+
+		profile:Release()
+
+	end
+
+	-- Test KeyInfo:
+
+	do
+
+		local profile = GameProfileStore1:LoadProfileAsync("ProfileKeyInfo")
+		profile.RobloxMetaData = {Color = {0.955, 0, 0}, Dedication = "Veteran"}
+		profile:AddUserId(2312310)
+		profile:AddUserId(50)
+		profile:AddUserId(420)
+		profile:RemoveUserId(50)
+
+		profile:Release()
+
+		local wait_for_profile = true
+		profile:ListenToHopReady(function()
+			wait_for_profile = false
+		end)
+
+		while wait_for_profile == true do wait() end
+
+		local key_info = profile.KeyInfo
+		local metadata = key_info:GetMetadata()
+		local user_ids = key_info:GetUserIds()
+		
+		local is_color_good = type(metadata.Color) == "table"
+			and metadata.Color[1] == 0.955
+			and metadata.Color[2] == 0
+			and metadata.Color[3] == 0
+
+		local is_passed = is_color_good == true
+			and metadata.Dedication == "Veteran" and table.find(user_ids, 2312310) ~= nil
+			and table.find(user_ids, 420) ~= nil and table.find(user_ids, 50) == nil
+
+		if live_mode == true and profile._is_user_mock ~= true and type(key_info) == "table" then
+			error("MOCK KEY INFO LEAK")
+		end
+
+		TestPass("ProfileService key info (Roblox Metadata) test", is_passed)
+
+	end
 	
 	-- Test MOCK: --
 	if ProfileTest.TEST_MOCK == true then
@@ -205,7 +429,7 @@ coroutine.wrap(function()
 	TestPass("ProfileService test #1 - part1", profile1.Data.Counter == 2)
 	GameProfileStore1:WipeProfileAsync("Profile1")
 	profile1 = GameProfileStore1:ViewProfileAsync("Profile1")
-	TestPass("ProfileService test #1 - part2", profile1.Data == nil)
+	TestPass("ProfileService test #1 - part2", profile1 == nil)
 	
 	-- Test #2: --
 	local profile2 = GameProfileStore1:LoadProfileAsync("Profile2", "ForceLoad")

@@ -74,14 +74,16 @@ ProfileStore:LoadProfileAsync(
   not_released_handler
 ) --> [Profile] or nil
 -- profile_key            [string] -- DataStore key
--- not_released_handler:
---    "ForceLoad"
---    or
---    "Steal"
---    or
---    [function](place_id, game_job_id)
+-- not_released_handler   nil or []: -- Defaults to "ForceLoad"
+--   	[string] "ForceLoad" -- Force loads profile on first call
+-- 		OR
+-- 		[string] "Steal" -- Steals the profile ignoring it's session lock
+-- 		OR
+-- 		[function] (place_id, game_job_id) --> [string] "Repeat", "Cancel", "ForceLoad" or "Steal"
+-- 		  	place_id      [number] or nil
+-- 		  	game_job_id   [string] or nil
 ```
-For basic usage, pass `"ForceLoad"` for the `not_released_handler` argument.
+For basic usage, pass `nil` for the `not_released_handler` argument.
 
 `not_released_handler` as a `function` argument is called when the profile is
 session-locked by a remote Roblox server:
@@ -163,8 +165,118 @@ ProfileStore:GlobalUpdateProfileAsync(
 ProfileStore:ViewProfileAsync(profile_key) --> [Profile] or nil
 -- profile_key   [string] -- DataStore key
 ```
-Writing and saving is not possible for profiles in view mode. `Profile.Data` and `Profile.MetaData` will be `nil`
-if the profile hasn't been created.
+Loads a profile without claiming a session lock. Returned `Profile` will not auto-save and releasing won't do anything. Data in the returned `Profile` can be changed (excluding global updates) to create a payload which can be saved via [Profile:OverwriteAsync()](#profileoverwriteasync).
+
+### ProfileStore:ProfileVersionQuery()
+```lua
+ProfileStore:ProfileVersionQuery(profile_key, sort_direction, min_date, max_date) --> [ProfileVersionQuery]
+-- profile_key      [string]
+-- sort_direction   nil or [Enum.SortDirection]
+-- min_date         nil or [DateTime] or [number] (epoch time millis)
+-- max_date         nil or [DateTime] or [number] (epoch time millis)
+```
+Creates a profile version query using [DataStore:ListVersionsAsync() (Official documentation)](https://developer.roblox.com/en-us/api-reference/function/DataStore/ListVersionsAsync). Results are retrieved through `ProfileVersionQuery:Next()`. For additional help, check the [versioning example in official Roblox documentation](https://developer.roblox.com/en-us/articles/Data-store#versioning-1). Date definitions are easier with the [DateTime (Official documentation)](https://developer.roblox.com/en-us/api-reference/datatype/DateTime) library. User defined day and time will have to be converted to [Unix time (Wikipedia)](https://en.wikipedia.org/wiki/Unix_time) while taking their timezone into account to expect the most precise results, though you can be rough and just set the date and time in the UTC timezone and expect a maximum margin of error of 24 hours for your query results.
+
+**Example code:**
+
+```lua
+local ProfileStore -- Your ProfileStore, loaded via "ProfileService.GetProfileStore()"
+
+local max_date = {
+  Year = 2021,
+  Month = 08,
+  Day = 13,
+  Hour = 09,
+  Minute = 32,
+}
+max_date = DateTime.fromUniversalTime(
+  -- You can throw in the values directly - I'm just
+  -- angry at this function not accepting a dictionary.
+  max_date.Year,
+  max_date.Month,
+  max_date.Day,
+  max_date.Hour,
+  max_date.Minute,
+)
+
+local query = ProfileStore:ProfileVersionQuery(
+  "Player_2312310",
+  Enum.SortDirection.Descending,
+  nil,
+  max_date
+)
+
+local profile = query:NextAsync() -- (Yields)
+
+if profile ~= nil then
+  -- You can surf the contents of the profile:
+  print(profile.Data)
+  -- Or inquire about the version time you found:
+  local updated_time = profile.KeyInfo.UpdatedTime -- Epoch time in MILLISECONDS
+  updated_time = math.floor(updated_time / 1000) -- Converting to seconds
+  print("First query result version UNIX timestamp:", updated_time)
+  print("The first query result is", os.time() - updated_time, "seconds old")
+  -- And if you're confident about the profile version meeting your expectations...
+  -- You can create a "profile payload" by optionally altering data:
+  profile.Data.Rubies = (profile.Data.Rubies or 0) + 1000
+  -- Clearing global updates if you're using global updates in your game:
+  profile:ClearGlobalUpdates()
+  -- And finally rolling back player data:
+  profile:OverwriteAsync()
+else
+  -- No profile version found that meets your query parameters
+end
+
+-- You may create a fancy system for fetching further versions in the query:
+local several_versions = {}
+local pending_tasks = 0
+for i = 1, 10 do
+  pending_tasks += 1
+  task.spawn(function()
+    local profile = query:NextAsync()
+    if profile ~= nil then -- Theoretically there's a chance you could get gaps between queries
+      table.insert(several_versions, profile)
+    end
+    pending_tasks -= 1
+  end)
+end
+
+while pending_tasks > 0 do
+  task.wait()
+end
+
+print(#several_versions, "versions retreived")
+-- NOTICE: Calling :NextAsync() multiple times in parallel
+--  will create parallel requests properly, but the order of
+--  completion is not guaranteed to be in the order :NextAsync()
+--  requests were made. Furthermore, I'm not sure calling
+--  multiple :NextAsync()'s in parallel is going to give you
+--  any additional speed, lol.
+```
+
+**Okay... Just do a SIMPLE rollback:**
+
+```lua
+local ProfileStore
+-- Year, Month, Day, Hour, Minute
+max_date = DateTime.fromUniversalTime(2021, 08, 13, 09, 32)
+
+local query = ProfileStore:ProfileVersionQuery(
+  "Player_2312310",
+  Enum.SortDirection.Descending,
+  nil,
+  max_date
+)
+
+local profile = query:NextAsync()
+if profile ~= nil then
+  profile:ClearGlobalUpdates()
+  profile:OverwriteAsync()
+  print("Rollback success!")
+else
+  print("No version to rollback to")
+end
+```
 
 ### ProfileStore:WipeProfileAsync()
 ``` lua
@@ -222,6 +334,7 @@ other in any way.
 ### Profile.Data
 ``` lua
 Profile.Data   [table]
+-- Non-strict reference - developer can set this value to a new table reference
 ```
 `Profile.Data` is the primary variable of a Profile object. The developer is free to read and write from
 the table while it is automatically saved to the [DataStore](https://developer.roblox.com/en-us/api-reference/class/DataStoreService).
@@ -265,6 +378,60 @@ This signal fires after every auto-save, after `Profile.MetaData.MetaTagsLatest`
 **`MetaTagsUpdated` will also fire after the Profile is saved for the last time and released**. Remember that changes to `Profile.Data` will not be saved after release - `Profile:IsActive()` will return `false` if the profile is released.
 
 `MetaTagsUpdated` example use can be found in the [Developer Products example code](/ProfileService/tutorial/developer_products/).
+
+### Profile.RobloxMetaData
+```lua
+Profile.RobloxMetaData [table]
+-- Non-strict reference - developer can set this value to a new table reference
+```
+!!! failure "Be cautious of very harsh limits for maximum Roblox Metadata size - As of writing this, total table content size cannot exceed 300 characters."
+
+Table that gets saved as [Metadata (Official documentation)](https://developer.roblox.com/en-us/articles/Data-store#metadata-1) of a DataStore key belonging to the profile.
+The way this table is saved is equivalent to using `DataStoreSetOptions:SetMetaData(Profile.RobloxMetaData)` and passing the `DataStoreSetOptions` object to a `:SetAsync()` call,
+except the Metadata will truly get set on the next auto-update cycle or when the profile is released.
+The periodic saving and saving upon releasing behaviour is identical to that of `Profile.Data` - Changes to this value will not be saved after the profile is released.
+
+**Example:**
+
+```lua
+local profile -- A profile object you loaded
+
+-- Mimicking the Roblox hub example:
+profile.RobloxMetaData = {["ExperienceElement"] = "Fire"}
+
+-- You can read from it and write to it at will:
+print(profile.RobloxMetaData.ExperienceElement)
+profile.RobloxMetaData.ExperienceElement = nil
+profile.RobloxMetaData.UserCategory = "Casual"
+
+-- I think setting it to a whole table at profile load would
+--   be more safe considering the size limit for meta data
+--   is pretty tight:
+profile.RobloxMetaData = {
+  UserCategory = "Casual",
+  FavoriteColor = {1, 0, 0},
+}
+```
+
+### Profile.UserIds
+```lua
+Profile.UserIds [table] -- (READ-ONLY) -- {user_id [number], ...}
+```
+User ids associated with this profile. Entries must be added with [Profile:AddUserId()](#profileadduserid) and removed with [Profile:RemoveUserId()](#profileremoveuserid).
+
+### Profile.KeyInfo
+```lua
+Profile.KeyInfo [DataStoreKeyInfo]
+```
+The [DataStoreKeyInfo (Official documentation)](https://developer.roblox.com/en-us/api-reference/class/DataStoreKeyInfo)
+instance related to this profile
+
+### Profile.KeyInfoUpdated
+```lua
+Profile.KeyInfoUpdated [ScriptSignal] (key_info [DataStoreKeyInfo])
+```
+A signal that gets triggered every time `Profile.KeyInfo` is updated with a new [DataStoreKeyInfo](https://developer.roblox.com/en-us/api-reference/class/DataStoreKeyInfo)
+instance reference after every auto-save or profile release.
 
 ### Profile.GlobalUpdates
 ``` lua
@@ -359,6 +526,21 @@ end)
 In short, `Profile:ListenToRelease()` and `Profile:ListenToHopReady()` will both execute the listener function after release, but `Profile:ListenToHopReady()` will
 additionally wait until the session lock is removed from the `Profile`.
 
+### Profile:AddUserId()
+```lua
+Profile:AddUserId(user_id)
+-- user_id   [number]
+```
+Associates a `UserId` with the profile. Multiple users can be associated with a single profile by calling this method for each individual `UserId`.
+The primary use of this method is to comply with GDPR (The right to erasure). More information in [official documentation](https://developer.roblox.com/en-us/articles/Data-store#metadata-1).
+
+### Profile:RemoveUserId()
+```lua
+Profile:RemoveUserId(user_id)
+-- user_id   [number]
+```
+Unassociates `UserId` with the profile if it was initially associated.
+
 ### Profile:Identify()
 ```lua
 Profile:Identify() --> [string]
@@ -381,10 +563,6 @@ after massive changes to the game.
 - Anything set through `profile:SetMetaTag(tag_name, value)` will be available through `Profile.MetaData.MetaTagsLatest[tag_name]` after an auto-save or a `:Save()` call - `Profile.MetaData.MetaTagsLatest` is a version
 of `Profile.MetaData.MetaTags` that has been successfully saved to the DataStore.
 
-!!! warning
-    Calling `Profile:SetMetaTag()` when the `Profile` is released will throw an error.
-    You can check `Profile:IsActive()` before using this method.
-
 !!! notice
     You can use `Profile.MetaData.MetaTagsLatest` for product purchase confirmation (By storing `receiptInfo.PurchaseId` values inside `Profile.MetaData.MetaTags` and waiting for them to appear in `Profile.MetaData.MetaTagsLatest`). Don't forget to clear really old `PurchaseId`'s to stay under DataStore limits.
 
@@ -403,6 +581,25 @@ this is already done for you automatically.
 !!! warning
     Calling `Profile:Save()` when the `Profile` is released will throw an error.
     You can check `Profile:IsActive()` before using this method.
+
+### Profile:ClearGlobalUpdates()
+```lua
+Profile:ClearGlobalUpdates()
+```
+!!! failure "Only works for profiles loaded through [:ViewProfileAsync()](#profilestoreviewprofileasync) or [:ProfileVersionQuery()](#profilestoreprofileversionquery)"
+Clears all global update data (active or locked) for a profile payload. It may be desirable to clear potential "residue" global updates (e.g. pending gifts) which were existing in a snapshot which is being used to recover
+player data through [:ProfileVersionQuery()](#profilestoreprofileversionquery).
+
+### Profile:OverwriteAsync()
+```lua
+Profile:OverwriteAsync()
+```
+!!! failure "Only works for profiles loaded through [:ViewProfileAsync()](#profilestoreviewprofileasync) or [:ProfileVersionQuery()](#profilestoreprofileversionquery)"
+
+!!! failure "Only use for rollback payloads!"
+    **Using this method for editing latest player data when the player is in-game can lead to several minutes of lost progress - it should be replaced by [:LoadProfileAsync()](#profilestoreloadprofileasync)**
+
+Pushes the `Profile` payload to the DataStore and releases the session lock for the profile.
 
 ## Global Updates
 

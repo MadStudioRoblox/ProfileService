@@ -46,7 +46,7 @@ More often than not, [ProfileStore:LoadProfileAsync()](/ProfileService/api/#prof
 
 ``` lua
 local start_time = tick()
-ProfileStore:LoadProfileAsync(profile_key, "ForceLoad")
+ProfileStore:LoadProfileAsync(profile_key)
 print(tick() - start_time) --> A value over 10 seconds
 ```
 

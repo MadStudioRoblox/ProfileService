@@ -25,7 +25,7 @@ local ProfileService = require(game.ServerScriptService.ProfileService)
 
 local Players = game:GetService("Players")
 
-local GameProfileStore = ProfileService.GetProfileStore(
+local ProfileStore = ProfileService.GetProfileStore(
 	"PlayerData",
 	ProfileTemplate
 )
@@ -53,11 +53,9 @@ local function DoSomethingWithALoadedProfile(player, profile)
 end
 
 local function PlayerAdded(player)
-	local profile = GameProfileStore:LoadProfileAsync(
-		"Player_" .. player.UserId,
-		"ForceLoad"
-	)
+	local profile = ProfileStore:LoadProfileAsync("Player_" .. player.UserId)
 	if profile ~= nil then
+		profile:AddUserId(player.UserId) -- GDPR compliance
 		profile:Reconcile() -- Fill in missing variables from ProfileTemplate (optional)
 		profile:ListenToRelease(function()
 			Profiles[player] = nil
