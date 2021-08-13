@@ -458,6 +458,8 @@ Profile:Reconcile() --> nil
 Fills in missing variables inside `Profile.Data` from `profile_template` table that was provided when calling `ProfileService.GetProfileStore()`. It's often necessary to use `:Reconcile()` if you're applying changes to your
 `profile_template` over the course of your game's development after release.
 
+The right time to call this method can be seen in the [basic usage example](/ProfileService/tutorial/basic_usage/).
+
 The following function is used in the reconciliation process:
 ``` lua
 local function ReconcileTable(target, template)
@@ -533,6 +535,8 @@ Profile:AddUserId(user_id)
 ```
 Associates a `UserId` with the profile. Multiple users can be associated with a single profile by calling this method for each individual `UserId`.
 The primary use of this method is to comply with GDPR (The right to erasure). More information in [official documentation](https://developer.roblox.com/en-us/articles/Data-store#metadata-1).
+
+The right time to call this method can be seen in the [basic usage example](/ProfileService/tutorial/basic_usage/).
 
 ### Profile:RemoveUserId()
 ```lua
