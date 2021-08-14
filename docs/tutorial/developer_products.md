@@ -30,7 +30,6 @@ local ProfileService = require(game.ServerScriptService.ProfileService)
 ----- Private Variables -----
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local GameProfileStore = ProfileService.GetProfileStore(
@@ -43,11 +42,9 @@ local Profiles = {} -- {player = profile, ...}
 ----- Private Functions -----
 
 local function PlayerAdded(player)
-	local profile = GameProfileStore:LoadProfileAsync(
-		"Player_" .. player.UserId,
-		"ForceLoad"
-	)
+	local profile = GameProfileStore:LoadProfileAsync("Player_" .. player.UserId)
 	if profile ~= nil then
+		profile:AddUserId(player.UserId) -- GDPR compliance
 		profile:Reconcile() -- Fill in missing variables from ProfileTemplate (optional)
 		profile:ListenToRelease(function()
 			Profiles[player] = nil
@@ -114,7 +111,7 @@ function PurchaseIdCheckAsync(profile, purchase_id, grant_product_callback) --> 
 		end)
 		
 		while result == nil do
-			RunService.Heartbeat:Wait()
+			task.wait()
 		end
 		
 		meta_tags_connection:Disconnect()
@@ -129,7 +126,7 @@ local function GetPlayerProfileAsync(player) --> [Profile] / nil
 	-- Yields until a Profile linked to a player is loaded or the player leaves
 	local profile = Profiles[player]
 	while profile == nil and player:IsDescendantOf(Players) == true do
-		RunService.Heartbeat:Wait()
+		task.wait()
 		profile = Profiles[player]
 	end
 	return profile
