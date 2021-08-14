@@ -2123,8 +2123,8 @@ function ProfileStore:ProfileVersionQuery(profile_key, sort_direction, min_date,
 	end
 
 	-- Type check:
-	if sort_direction ~= nil and typeof(sort_direction) ~= "EnumItem"
-		or sort_direction.EnumType ~= Enum.SortDirection then
+	if sort_direction ~= nil and (typeof(sort_direction) ~= "EnumItem"
+		or sort_direction.EnumType ~= Enum.SortDirection) then
 		error("[ProfileService]: Invalid sort_direction (" .. tostring(sort_direction) .. ")")
 	end
 
