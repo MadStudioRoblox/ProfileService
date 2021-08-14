@@ -388,8 +388,8 @@ Profile.RobloxMetaData [table]
 
 Table that gets saved as [Metadata (Official documentation)](https://developer.roblox.com/en-us/articles/Data-store#metadata-1) of a DataStore key belonging to the profile.
 The way this table is saved is equivalent to using `DataStoreSetOptions:SetMetaData(Profile.RobloxMetaData)` and passing the `DataStoreSetOptions` object to a `:SetAsync()` call,
-except the Metadata will truly get set on the next auto-update cycle or when the profile is released.
-The periodic saving and saving upon releasing behaviour is identical to that of `Profile.Data` - Changes to this value will not be saved after the profile is released.
+except changes will truly get saved on the next auto-update cycle or when the profile is released.
+The periodic saving and saving upon releasing behaviour is identical to that of `Profile.Data` - After the profile is released further changes to this value will not be saved.
 
 **Example:**
 
