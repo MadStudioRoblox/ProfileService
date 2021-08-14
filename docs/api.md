@@ -162,120 +162,147 @@ ProfileStore:GlobalUpdateProfileAsync(
 
 ### ProfileStore:ViewProfileAsync()
 ``` lua
-ProfileStore:ViewProfileAsync(profile_key) --> [Profile] or nil
+ProfileStore:ViewProfileAsync(profile_key, version) --> [Profile] or nil
 -- profile_key   [string] -- DataStore key
+-- version       nil or [string] -- DataStore key version
 ```
-Loads a profile without claiming a session lock. Returned `Profile` will not auto-save and releasing won't do anything. Data in the returned `Profile` can be changed (excluding global updates) to create a payload which can be saved via [Profile:OverwriteAsync()](#profileoverwriteasync).
+!!! notice "Passing `version` argument in mock mode (Or offline mode) will throw an error - Mock versioning is not supported"
+Attempts to load the latest profile version (or a specified version via the `version` argument) from the DataStore without claiming a session lock.
+Returns `nil` if such version does not exist. Returned `Profile` will not auto-save and releasing won't do anything.
+Data in the returned `Profile` can be changed to create a payload which can be saved via [Profile:OverwriteAsync()](#profileoverwriteasync).
+
+`:ViewProfileAsync()` is the the prefered way of viewing player data without editing it.
 
 ### ProfileStore:ProfileVersionQuery()
 ```lua
 ProfileStore:ProfileVersionQuery(profile_key, sort_direction, min_date, max_date) --> [ProfileVersionQuery]
 -- profile_key      [string]
--- sort_direction   nil or [Enum.SortDirection]
+-- sort_direction   nil or [Enum.SortDirection] -- Defaults to "Ascending"
 -- min_date         nil or [DateTime] or [number] (epoch time millis)
 -- max_date         nil or [DateTime] or [number] (epoch time millis)
 ```
 Creates a profile version query using [DataStore:ListVersionsAsync() (Official documentation)](https://developer.roblox.com/en-us/api-reference/function/DataStore/ListVersionsAsync). Results are retrieved through `ProfileVersionQuery:Next()`. For additional help, check the [versioning example in official Roblox documentation](https://developer.roblox.com/en-us/articles/Data-store#versioning-1). Date definitions are easier with the [DateTime (Official documentation)](https://developer.roblox.com/en-us/api-reference/datatype/DateTime) library. User defined day and time will have to be converted to [Unix time (Wikipedia)](https://en.wikipedia.org/wiki/Unix_time) while taking their timezone into account to expect the most precise results, though you can be rough and just set the date and time in the UTC timezone and expect a maximum margin of error of 24 hours for your query results.
 
-**Example code:**
+**Examples of query arguments:**
+
+   - Pass `nil` for `sort_direction`, `min_date` and `max_date` to find the oldest available version
+   - Pass `Enum.SortDirection.Descending` for `sort_direction`, `nil` for `min_date` and `max_date` to find the most recent version.
+   - Pass `Enum.SortDirection.Descending` for `sort_direction`, `nil` for `min_date` and `DateTime` **defining a time before an event**
+    (e.g. two days earlier before your game unrightfully stole 1,000,000 rubies from a player) for `max_date` to find the most recent
+    version of a `Profile` that existed before said event.
+
+**Case example: "I lost all of my rubies on August 14th!"**
 
 ```lua
-local ProfileStore -- Your ProfileStore, loaded via "ProfileService.GetProfileStore()"
+-- Get a ProfileStore object with the same arguments you passed to the
+--  ProfileStore that loads player Profiles. It can also just be
+--  the very same ProfileStore object:
 
-local max_date = {
-  Year = 2021,
-  Month = 08,
-  Day = 13,
-  Hour = 09,
-  Minute = 32,
-}
-max_date = DateTime.fromUniversalTime(
-  -- You can throw in the values directly - I'm just
-  -- angry at this function not accepting a dictionary.
-  max_date.Year,
-  max_date.Month,
-  max_date.Day,
-  max_date.Hour,
-  max_date.Minute,
-)
+local ProfileStore = ProfileService.GetProfileStore(store_name, template)
+
+-- If you can't figure out the exact time and timezone the player lost rubies
+--  in on the day of August 14th, then your best bet is to try querying
+--  UTC August 13th. If the first entry still doesn't have the rubies - 
+--  try a new query of UTC August 12th and etc.
+
+local max_date = DateTime.fromUniversalTime(2021, 08, 13) -- UTC August 13th, 2021
 
 local query = ProfileStore:ProfileVersionQuery(
-  "Player_2312310",
+  "Player_2312310", -- The same profile key that gets passed to :LoadProfileAsync()
   Enum.SortDirection.Descending,
   nil,
   max_date
 )
 
-local profile = query:NextAsync() -- (Yields)
-
-if profile ~= nil then
-  -- You can surf the contents of the profile:
-  print(profile.Data)
-  -- Or inquire about the version time you found:
-  local updated_time = profile.KeyInfo.UpdatedTime -- Epoch time in MILLISECONDS
-  updated_time = math.floor(updated_time / 1000) -- Converting to seconds
-  print("First query result version UNIX timestamp:", updated_time)
-  print("The first query result is", os.time() - updated_time, "seconds old")
-  -- And if you're confident about the profile version meeting your expectations...
-  -- You can create a "profile payload" by optionally altering data:
-  profile.Data.Rubies = (profile.Data.Rubies or 0) + 1000
-  -- Clearing global updates if you're using global updates in your game:
-  profile:ClearGlobalUpdates()
-  -- And finally rolling back player data:
-  profile:OverwriteAsync()
-else
-  -- No profile version found that meets your query parameters
-end
-
--- You may create a fancy system for fetching further versions in the query:
-local several_versions = {}
-local pending_tasks = 0
-for i = 1, 10 do
-  pending_tasks += 1
-  task.spawn(function()
-    local profile = query:NextAsync()
-    if profile ~= nil then -- Theoretically there's a chance you could get gaps between queries
-      table.insert(several_versions, profile)
-    end
-    pending_tasks -= 1
-  end)
-end
-
-while pending_tasks > 0 do
-  task.wait()
-end
-
-print(#several_versions, "versions retreived")
--- NOTICE: Calling :NextAsync() multiple times in parallel
---  will create parallel requests properly, but the order of
---  completion is not guaranteed to be in the order :NextAsync()
---  requests were made. Furthermore, I'm not sure calling
---  multiple :NextAsync()'s in parallel is going to give you
---  any additional speed, lol.
-```
-
-**Okay... Just do a SIMPLE rollback:**
-
-```lua
-local ProfileStore
--- Year, Month, Day, Hour, Minute
-max_date = DateTime.fromUniversalTime(2021, 08, 13, 09, 32)
-
-local query = ProfileStore:ProfileVersionQuery(
-  "Player_2312310",
-  Enum.SortDirection.Descending,
-  nil,
-  max_date
-)
-
+-- Get the first result in the query:
 local profile = query:NextAsync()
+
 if profile ~= nil then
+
   profile:ClearGlobalUpdates()
-  profile:OverwriteAsync()
+
+  profile:OverwriteAsync() -- This method does the actual rolling back;
+    -- Don't call this method until you're sure about setting the latest
+    -- version to a copy of the previous one
+
   print("Rollback success!")
+
+  print(profile.Data) -- You'll be able to surf table contents if
+    -- you're runing this code in studio with access to API services
+    -- enabled and have expressive output enabled; If the printed
+    -- data doesn't have the rubies, you'll want to change your
+    -- query parameters.
+
 else
   print("No version to rollback to")
 end
+```
+
+**Case example: Studying data mutation over time**
+
+```lua
+-- You have ProfileService working in your game. You join
+--  the game with your own account and go to https://www.unixtimestamp.com
+--  and save the current UNIX timestamp resembling present time.
+--  You can then make the game alter your data by giving you
+--  currency, items, experience, etc.
+
+local ProfileStore = ProfileService.GetProfileStore(store_name, template)
+
+-- UNIX timestamp you saved:
+local min_date = DateTime.fromUnixTimestamp(1628952101)
+local print_minutes = 5 -- Print the next 5 minutes of history
+
+local query = ProfileStore:ProfileVersionQuery(
+  "Player_2312310",
+  Enum.SortDirection.Ascending,
+  min_date
+)
+
+-- You can now attempt to print out every snapshot of your data saved
+--  at an average periodic interval of 30 seconds (ProfileService auto-save)
+--  starting from the time you took the UNIX timestamp!
+
+local finish_update_time = min_date.UnixTimestampMillis + (print_minutes * 60000)
+
+print("Fetching ", print_minutes, "minutes of saves:")
+
+local entry_count = 0
+
+while true do
+
+  entry_count +=1
+  local profile = query:NextAsync()
+
+  if profile ~= nil then
+
+    if profile.KeyInfo.UpdatedTime > finish_update_time then
+      if entry_count == 1 then
+        print("No entries found in set time period. (Start timestamp too early)")
+      else
+        print("Time period finished.")
+      end
+      break
+    end
+
+    print(
+      "Entry", entry_count, "-",
+      DateTime.fromUnixTimestampMillis(profile.KeyInfo.UpdatedTime):ToIsoDate()
+    )
+
+    print(profile.Data) -- Printing table for studio expressive output
+
+  else
+    if entry_count == 1 then
+      print("No entries found in set time period. (Start timestamp too late)")
+    else
+      print("No more entries in query.")
+    end
+    break
+  end
+
+end
+
 ```
 
 ### ProfileStore:WipeProfileAsync()
@@ -600,10 +627,10 @@ Profile:OverwriteAsync()
 ```
 !!! failure "Only works for profiles loaded through [:ViewProfileAsync()](#profilestoreviewprofileasync) or [:ProfileVersionQuery()](#profilestoreprofileversionquery)"
 
-!!! failure "Only use for rollback payloads!"
+!!! failure "Only use for rollback payloads (Setting latest version to a copy of a previous version)!"
     **Using this method for editing latest player data when the player is in-game can lead to several minutes of lost progress - it should be replaced by [:LoadProfileAsync()](#profilestoreloadprofileasync)**
 
-Pushes the `Profile` payload to the DataStore and releases the session lock for the profile.
+Pushes the `Profile` payload to the DataStore (saves the profile) and releases the session lock for the profile.
 
 ## Global Updates
 
