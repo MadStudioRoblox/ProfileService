@@ -43,11 +43,9 @@ local function DoSomethingWithALoadedProfile(player, profile)
 end
 
 local function PlayerAdded(player)
-	local profile = GameProfileStore:LoadProfileAsync(
-		"Player_" .. player.UserId,
-		"ForceLoad"
-	)
+	local profile = GameProfileStore:LoadProfileAsync("Player_" .. player.UserId)
 	if profile ~= nil then
+		profile:AddUserId(player.UserId) -- GDPR compliance
 		profile:Reconcile() -- Fill in missing variables from ProfileTemplate (optional)
 		profile:ListenToRelease(function()
 			Profiles[player] = nil
