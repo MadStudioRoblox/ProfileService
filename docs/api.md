@@ -628,7 +628,7 @@ Profile:OverwriteAsync()
 !!! failure "Only works for profiles loaded through [:ViewProfileAsync()](#profilestoreviewprofileasync) or [:ProfileVersionQuery()](#profilestoreprofileversionquery)"
 
 !!! failure "Only use for rollback payloads (Setting latest version to a copy of a previous version)!"
-    **Using this method for editing latest player data when the player is in-game can lead to several minutes of lost progress - it should be replaced by [:LoadProfileAsync()](#profilestoreloadprofileasync)**
+    **Using this method for editing latest player data when the player is in-game can lead to several minutes of lost progress - it should be replaced by [:LoadProfileAsync()](#profilestoreloadprofileasync) which will wait for the next live profile auto-save if the player is in-game, allowing the remote server to release the profile and save latest data.**
 
 Pushes the `Profile` payload to the DataStore (saves the profile) and releases the session lock for the profile.
 
