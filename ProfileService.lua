@@ -746,7 +746,7 @@ local function StandardProfileUpdateAsyncDataStore(profile_store, profile_key, u
 					and type(latest_data.GlobalUpdates) == "table" then
 
 					latest_data.WasCorrupted = false -- Must be set to false if set previously
-					global_updates_data = latest_data.GlobalUpdates
+					global_updates_data = latest_data.GlobalUpdates or global_updates_data
 					missing_profile = true
 				else
 					missing_profile = true
@@ -2047,19 +2047,7 @@ function ProfileStore:ViewProfileAsync(profile_key, version, _use_mock) --> [Pro
 						MetaTags = {},
 					}
 				end,
-				EditProfile = function(latest_data)
-					latest_data.GlobalUpdates = latest_data.GlobalUpdates or {0, {}}
-					latest_data.Data = latest_data.Data or DeepCopyTable(self._profile_template)
-					if latest_data.MetaData ~= nil then
-						latest_data.MetaData = {
-							ProfileCreateTime = os.time(),
-							SessionLoadCount = 0,
-							ActiveSession = nil,
-							ForceLoadSession = nil,
-							MetaTags = {},
-						}
-					end
-				end,
+				EditProfile = nil,
 			},
 			_use_mock == UseMockTag,
 			true, -- Use :GetAsync()
