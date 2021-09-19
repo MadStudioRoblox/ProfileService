@@ -1,0 +1,29 @@
+{
+	"name": "ProfileService",
+	"servePlaceIds": null,
+	"tree": {
+		"$className": "DataModel",
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$ignoreUnknownInstances": true,
+			"ProfileService": {
+				"$path": "ProfileService.lua"
+			},
+			"ProfileTest": {
+				"$path": "ProfileTest.server.lua"
+			},
+			"PlayerProfileExample": {
+				"$path": "Examples/PlayerProfileExample.server.lua",
+				"$properties": {
+					"Disabled": true
+				}
+			},
+			"DeveloperProductExample": {
+				"$path": "Examples/DeveloperProductExample.server.lua",
+				"$properties": {
+					"Disabled": true
+				}
+			}
+		}
+ 	}
+}
