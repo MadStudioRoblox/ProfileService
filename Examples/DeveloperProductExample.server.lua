@@ -86,7 +86,7 @@ function PurchaseIdCheckAsync(profile, purchase_id, grant_product_callback) --> 
 				table.remove(local_purchase_ids, 1)
 			end
 			table.insert(local_purchase_ids, purchase_id)
-			coroutine.wrap(grant_product_callback)()
+			task.spawn(grant_product_callback)
 		end
 		
 		-- Waiting until the purchase is confirmed to be saved:
@@ -173,7 +173,7 @@ end
 ----- Initialize -----
 
 for _, player in ipairs(Players:GetPlayers()) do
-	coroutine.wrap(PlayerAdded)(player)
+	task.spawn(PlayerAdded)(player)
 end
 
 MarketplaceService.ProcessReceipt = ProcessReceipt
