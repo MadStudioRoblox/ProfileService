@@ -173,7 +173,7 @@ end
 ----- Initialize -----
 
 for _, player in ipairs(Players:GetPlayers()) do
-	task.spawn(PlayerAdded)(player)
+	task.spawn(PlayerAdded, player)
 end
 
 MarketplaceService.ProcessReceipt = ProcessReceipt
