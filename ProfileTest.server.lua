@@ -36,10 +36,10 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ProfileService
 do
 	local did_yield = true
-	coroutine.wrap(function()
+	task.spawn(function()
 		ProfileService = require(ServerScriptService.ProfileService)
 		did_yield = false
-	end)()
+	end)
 	if did_yield == true then
 		error("[ProfileTest]: ProfileService ModuleScript should not yield when required!")
 	end
@@ -182,7 +182,7 @@ if ProfileTest.TEST_MOCK == true then
 	print("[MOCK]")
 end
 
-coroutine.wrap(function()
+task.spawn(function()
 	
 	print("RUNNING PROFILE TEST")
 	
@@ -665,4 +665,4 @@ coroutine.wrap(function()
 	profile11:Reconcile()
 	TestPass("ProfileService test #11", profile11.Data.Counter == 0 and profile11.Data.Array == false and type(profile11.Data.Dictionary) == "table")
 	
-end)()
+end)
