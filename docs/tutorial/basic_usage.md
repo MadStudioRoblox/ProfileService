@@ -81,7 +81,7 @@ end
 
 -- In case Players have joined the server earlier than this script ran:
 for _, player in ipairs(Players:GetPlayers()) do
-	coroutine.wrap(PlayerAdded)(player)
+	task.spawn(PlayerAdded, player)
 end
 
 ----- Connections -----
