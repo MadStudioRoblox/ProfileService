@@ -2383,6 +2383,9 @@ task.spawn(function()
 	WaitForLiveAccessCheck()
 	Madwork.ConnectToOnClose(
 		function()
+			-- Allow other OnClose calls to run first:
+			task.wait()
+			
 			ProfileService.ServiceLocked = true
 			-- 1) Release all active profiles: --
 			-- Clone AutoSaveList to a new table because AutoSaveList changes when profiles are released:
