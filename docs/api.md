@@ -43,6 +43,19 @@ Analytics endpoint for cases when DataStore is throwing too many errors and it's
 likely affecting your game really really bad - this could be due to developer errors
 or due to Roblox server problems. Could be used to alert players about data store outages.
 
+### ProfileService.IsLive()
+``` lua
+ProfileService.IsLive() --> [bool] -- (CAN YIELD!!!)
+```
+Returns true if ProfileService is connected to Roblox DataStores
+
+!!! notice
+    `.IsLive()` can only return false in Studio
+
+!!! warning
+    `.IsLive()` can yield while checking if datastores are available in Studio
+
+
 ### ProfileService.GetProfileStore()
 ``` lua
 ProfileService.GetProfileStore(
