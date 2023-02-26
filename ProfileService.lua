@@ -1074,7 +1074,7 @@ local function SaveProfileAsync(profile, release_from_session, is_overwriting)
 			if type(active_session) == "table" then
 				session_owns_profile = IsThisSession(active_session) and session_load_count == last_session_load_count
 			end
-			local is_active = profile:IsActive()
+			local is_active = profile['IsActive'] and profile:IsActive()
 			if session_owns_profile == true then
 				-- 6) Check for new global updates: --
 				if is_active == true then -- Profile could've been released before the saving thread finished
@@ -1178,7 +1178,7 @@ function GlobalUpdates:ListenToNewActiveUpdate(listener) --> [ScriptConnection] 
 		error("[ProfileService]: Can't listen to new global updates in ProfileStore:GlobalUpdateProfileAsync()")
 	elseif self._new_active_update_listeners == nil then
 		error("[ProfileService]: Can't listen to new global updates in view mode")
-	elseif profile:IsActive() == false then -- Check if profile is expired
+	elseif profile['IsActive'] and profile:IsActive() == false then -- Check if profile is expired
 		return { -- Do not connect listener if the profile is expired
 			Disconnect = function() end,
 		}
@@ -1196,7 +1196,7 @@ function GlobalUpdates:ListenToNewLockedUpdate(listener) --> [ScriptConnection] 
 		error("[ProfileService]: Can't listen to new global updates in ProfileStore:GlobalUpdateProfileAsync()")
 	elseif self._new_locked_update_listeners == nil then
 		error("[ProfileService]: Can't listen to new global updates in view mode")
-	elseif profile:IsActive() == false then -- Check if profile is expired
+	elseif profile['IsActive'] and profile:IsActive() == false then -- Check if profile is expired
 		return { -- Do not connect listener if the profile is expired
 			Disconnect = function() end,
 		}
@@ -1214,7 +1214,7 @@ function GlobalUpdates:LockActiveUpdate(update_id)
 		error("[ProfileService]: Can't lock active global updates in ProfileStore:GlobalUpdateProfileAsync()")
 	elseif self._pending_update_lock == nil then
 		error("[ProfileService]: Can't lock active global updates in view mode")
-	elseif profile:IsActive() == false then -- Check if profile is expired
+	elseif profile['IsActive'] and profile:IsActive() == false then -- Check if profile is expired
 		error("[ProfileService]: PROFILE EXPIRED - Can't lock active global updates")
 	end
 	-- Check if global update exists with given update_id
@@ -1250,7 +1250,7 @@ function GlobalUpdates:ClearLockedUpdate(update_id)
 		error("[ProfileService]: Can't clear locked global updates in ProfileStore:GlobalUpdateProfileAsync()")
 	elseif self._pending_update_clear == nil then
 		error("[ProfileService]: Can't clear locked global updates in view mode")
-	elseif profile:IsActive() == false then -- Check if profile is expired
+	elseif profile['IsActive'] and profile:IsActive() == false then -- Check if profile is expired
 		error("[ProfileService]: PROFILE EXPIRED - Can't clear locked global updates")
 	end
 	-- Check if global update exists with given update_id
@@ -1416,7 +1416,7 @@ function Profile:ListenToRelease(listener) --> [ScriptConnection] (place_id / ni
 	if self._view_mode == true then
 		return {Disconnect = function() end}
 	end
-	if self:IsActive() == false then
+	if self['IsActive'] and self:IsActive() == false then
 		-- Call release listener immediately if profile is expired
 		local place_id
 		local game_job_id
@@ -1436,7 +1436,7 @@ function Profile:Save()
 	if self._view_mode == true then
 		error("[ProfileService]: Can't save Profile in view mode - Should you be calling :OverwriteAsync() instead?")
 	end
-	if self:IsActive() == false then
+	if self['IsActive'] and self:IsActive() == false then
 		warn("[ProfileService]: Attempted saving an inactive profile "
 			.. self:Identify() .. "; Traceback:\n" .. debug.traceback())
 		return
@@ -1456,7 +1456,7 @@ function Profile:Release()
 	if self._view_mode == true then
 		return
 	end
-	if self:IsActive() == true then
+	if self['IsActive'] and self:IsActive() == true then
 		task.spawn(SaveProfileAsync, self, true) -- Call save function in a new thread with release_from_session = true
 	end
 end
@@ -2253,18 +2253,21 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 	}
 	setmetatable(profile_store, ProfileStore)
 
+	local options = Instance.new("DataStoreOptions")
+	options:SetExperimentalFeatures({v2 = true})
+
 	if IsLiveCheckActive == true then
 		profile_store._is_pending = true
 		task.spawn(function()
 			WaitForLiveAccessCheck()
 			if UseMockDataStore == false then
-				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
+				profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope, options)
 			end
 			profile_store._is_pending = false
 		end)
 	else
 		if UseMockDataStore == false then
-			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope)
+			profile_store._global_data_store = DataStoreService:GetDataStore(profile_store_name, profile_store_scope, options)
 		end
 	end
 
@@ -2393,7 +2396,7 @@ task.spawn(function()
 			end
 			-- Release the profiles; Releasing profiles can trigger listeners that release other profiles, so check active state:
 			for _, profile in ipairs(active_profiles) do
-				if profile:IsActive() == true then
+				if profile['IsActive'] and profile:IsActive() == true then
 					on_close_save_job_count = on_close_save_job_count + 1
 					task.spawn(function() -- Save profile on new thread
 						SaveProfileAsync(profile, true)
