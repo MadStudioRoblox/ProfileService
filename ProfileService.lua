@@ -1738,7 +1738,7 @@ ProfileStore.__index = ProfileStore
 
 function ProfileStore:LoadProfileAsync(
 	profile_key: string,
-	not_released_handler: ((number, string) -> "Repeat" | "Cancel" | "ForceLoad" | "Steal")?,
+	not_released_handler: ((number, string) -> "Repeat" | "Cancel" | "ForceLoad" | "Steal") | "Steal" | "ForceLoad" | nil,
 	_use_mock: boolean
 ): Profile? --> [Profile / nil] not_released_handler(place_id, game_job_id)
 	not_released_handler = not_released_handler or "ForceLoad"
