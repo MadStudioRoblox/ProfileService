@@ -852,7 +852,7 @@ local function StandardProfileUpdateAsyncDataStore(
 	end
 end
 
-local function RemoveProfileFromAutoSave(profile: Profile)
+local function RemoveProfileFromAutoSave(profile: GenericProfile)
 	local auto_save_index = table.find(AutoSaveList, profile)
 	if auto_save_index ~= nil then
 		table.remove(AutoSaveList, auto_save_index)
@@ -865,7 +865,7 @@ local function RemoveProfileFromAutoSave(profile: Profile)
 	end
 end
 
-local function AddProfileToAutoSave(profile: Profile) -- Notice: Makes sure this profile isn't auto-saved too soon
+local function AddProfileToAutoSave(profile: GenericProfile) -- Notice: Makes sure this profile isn't auto-saved too soon
 	-- Add at AutoSaveIndex and move AutoSaveIndex right:
 	table.insert(AutoSaveList, AutoSaveIndex, profile)
 	if #AutoSaveList > 1 then
@@ -876,7 +876,7 @@ local function AddProfileToAutoSave(profile: Profile) -- Notice: Makes sure this
 	end
 end
 
-local function ReleaseProfileInternally(profile: Profile)
+local function ReleaseProfileInternally(profile: GenericProfile)
 	-- 1) Remove profile object from ProfileService references: --
 	-- Clear reference in ProfileStore:
 	local profile_store = profile._profile_store
@@ -903,7 +903,7 @@ local function ReleaseProfileInternally(profile: Profile)
 end
 
 local function CheckForNewGlobalUpdates(
-	profile: Profile,
+	profile: GenericProfile,
 	old_global_updates_data: GlobalUpdatesData,
 	new_global_updates_data: GlobalUpdatesData
 )
@@ -971,7 +971,7 @@ local function CheckForNewGlobalUpdates(
 	end
 end
 
-local function SaveProfileAsync(profile: Profile, release_from_session: boolean, is_overwriting: boolean)
+local function SaveProfileAsync(profile: GenericProfile, release_from_session: boolean, is_overwriting: boolean)
 	if type(profile.Data) ~= "table" then
 		RegisterCorruption(
 			profile._profile_store._profile_store_name,
@@ -1412,7 +1412,7 @@ local Profile = {
 		_is_user_mock = false, -- ProfileStore.Mock
 		_mock_key_info = {},
 	--]]
-} :: Profile
+} :: GenericProfile
 Profile.__index = Profile
 
 function Profile:IsActive(): boolean --> [bool]
@@ -1612,7 +1612,7 @@ function ProfileVersionQuery:_MoveQueue()
 	end
 end
 
-function ProfileVersionQuery:NextAsync(_is_stacking: boolean?): Profile? --> [Profile] or nil
+function ProfileVersionQuery:NextAsync(_is_stacking: boolean?): GenericProfile? --> [Profile] or nil
 	if self._profile_store == nil then
 		return nil
 	end
@@ -1740,7 +1740,7 @@ function ProfileStore:LoadProfileAsync(
 	profile_key: string,
 	not_released_handler: ((number, string) -> "Repeat" | "Cancel" | "ForceLoad" | "Steal") | "Steal" | "ForceLoad" | nil,
 	_use_mock: boolean
-): Profile? --> [Profile / nil] not_released_handler(place_id, game_job_id)
+): GenericProfile? --> [Profile / nil] not_released_handler(place_id, game_job_id)
 	not_released_handler = not_released_handler or "ForceLoad"
 
 	if self._profile_template == nil then
@@ -2063,7 +2063,7 @@ function ProfileStore:ViewProfileAsync(
 	profile_key: string,
 	version: string,
 	_use_mock: boolean
-): Profile? --> [Profile / nil]
+): GenericProfile? --> [Profile / nil]
 	if type(profile_key) ~= "string" or string.len(profile_key) == 0 then
 		error("[ProfileService]: Invalid profile_key")
 	end
@@ -2485,16 +2485,15 @@ export type ProfileStore = typeof(ProfileStore) & {
 	_profile_template: { [string]: any },
 	_global_data_store: DataStore,
 
-	_loaded_profiles: { [string]: Profile },
+	_loaded_profiles: { [string]: GenericProfile },
 	_profile_load_jobs: { [string]: { number | any } | any },
 
-	_mock_loaded_profiles: { [string]: Profile },
+	_mock_loaded_profiles: { [string]: GenericProfile },
 	_mock_profile_load_jobs: { [string]: { number | any } | any },
 }
-export type ProfileService = typeof(ProfileService)
 
-export type Profile = typeof(Profile) & {
-	Data: { [string]: any },
+export type Profile<T> = typeof(Profile) & {
+	Data: T,
 	MetaData: { [string]: any },
 	GlobalUpdates: GlobalUpdates,
 
@@ -2511,6 +2510,8 @@ export type Profile = typeof(Profile) & {
 	_is_user_mock: boolean,
 	_mock_key_info: { [string]: any },
 }
+
+export type GenericProfile = Profile<{ [string]: any }>
 
 export type ProfileVersionQuery = typeof(ProfileVersionQuery) & {
 	_profile_store: ProfileStore,
@@ -2535,7 +2536,7 @@ export type GlobalUpdates = typeof(GlobalUpdates) & {
 	_new_active_update_listeners: ScriptSignal?,
 	_new_locked_update_listeners: ScriptSignal?,
 
-	_profile: Profile?,
+	_profile: GenericProfile?,
 
 	_update_handler_mode: boolean?,
 }
