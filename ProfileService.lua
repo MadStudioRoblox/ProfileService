@@ -2557,7 +2557,7 @@ type UpdateSettings = {
 	EditProfile: (DataValue) -> nil,
 }
 
-type ProfileStoreIndex = number | { Name: string, Scope: string? }
+type ProfileStoreIndex = string | { Name: string, Scope: string? }
 type SessionTag = { number | string }
 
 type MockDataStoreKeyInfo = {
