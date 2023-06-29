@@ -203,7 +203,7 @@
 local SETTINGS = {
 
 	AutoSaveProfiles = 30, -- Seconds (This value may vary - ProfileService will split the auto save load evenly in the given time)
-	RobloxWriteCooldown = 7, -- Seconds between successive DataStore calls for the same key
+	RobloxWriteCooldown = 0, -- Seconds between successive DataStore calls for the same key
 	ForceLoadMaxSteps = 8, -- Steps taken before ForceLoad request steals the active session for a profile
 	AssumeDeadSessionLock = 30 * 60, -- (seconds) If a profile hasn't been updated for 30 minutes, assume the session lock is dead
 		-- As of writing, os.time() is not completely reliable, so we can only assume session locks are dead after a significant amount of time.
