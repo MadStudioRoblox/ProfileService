@@ -1,8 +1,9 @@
 [package]
 name = "aspecky/profileservice"
-version = "1.0.5"
+version = "1.0.7"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 description = "loleri's ProfileService but fully typed"
 authors = ["loleris", "aspecky"]
-
+exclude = ["**"]
+include = ["default.project.json", "src", "src/**", "LICENSE", "wally.toml"]
