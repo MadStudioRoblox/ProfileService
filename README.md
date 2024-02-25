@@ -1,3 +1,14 @@
+# Installation
+
+To install using wally:
+```
+ProfileService = "aspecky/profileservice@^1.0.0"
+```
+If you dont use rojo but would still like to use wally packages you can use [studio-wally](https://github.com/fewkz/studio-wally?tab=readme-ov-file)
+
+Or just copy paste the contents of [ProfileService](https://github.com/Aspecky/ProfileService/blob/master/ProfileService.lua) into a `ModuleScript`
+
+
 # Madwork - ProfileService
 
 ProfileService is a stand-alone ModuleScript that specialises in loading and auto-saving
