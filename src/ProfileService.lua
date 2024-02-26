@@ -9,82 +9,180 @@ type Signal<T...> = {
 	Connect: (self: Signal<T...>, fn: (T...) -> ()) -> Connection,
 }
 
-type ProfileVersionQuery<T> = {
-	NextAsync: () -> UnsafeProfile<T>?,
+type ProfileVersionQuery<Data> = {
+	NextAsync: (self: ProfileVersionQuery<Data>) -> UnsafeProfile<Data>?,
 }
 
 type GlobalUpdates = {
+	--- Should be used immediately after a `Profile` is loaded to scan and progress any pending `Active` updates to `Locked` state.
+	--- Returns `{ {update_id, update_data}, ...}`
 	GetActiveUpdates: (self: GlobalUpdates) -> { { any } },
+
+	--- Should be used immediately after a `Profile` is loaded to scan and progress any pending `Locked` updates to `Cleared` state.
+	--- Returns `{ {update_id, update_data}, ...}`
 	GetLockedUpdates: (self: GlobalUpdates) -> { { any } },
-	ListenToNewActiveUpdate: (self: GlobalUpdates, (update_id: number, update_data: { any }) -> ()) -> Connection,
-	ListenToNewLockedUpdate: (self: GlobalUpdates, (update_id: number, update_data: { any }) -> ()) -> Connection,
-	LockActiveUpdate: (self: GlobalUpdates, update_id: number) -> (),
-	ClearLockedUpdate: (self: GlobalUpdates, update_id: number) -> (),
-	AddActiveUpdate: (self: GlobalUpdates, update_data: { any }) -> (),
-	ChangeActiveUpdate: (self: GlobalUpdates, update_id: number, update_data: { any }) -> (),
-	ClearActiveUpdate: (self: GlobalUpdates, update_id: number) -> (),
 }
 
-type ProfileStore<T> = {
-	Mock: ProfileStore<T>,
+type ProfileGlobalUpdates = GlobalUpdates & {
+	ListenToNewActiveUpdate: (
+		self: ProfileGlobalUpdates,
+		(update_id: number, update_data: { any }) -> ()
+	) -> Connection,
+
+	ListenToNewLockedUpdate: (
+		self: ProfileGlobalUpdates,
+		(update_id: number, update_data: { any }) -> ()
+	) -> Connection,
+
+	LockActiveUpdate: (self: ProfileGlobalUpdates, update_id: number) -> (),
+
+	ClearLockedUpdate: (self: ProfileGlobalUpdates, update_id: number) -> (),
+}
+
+type StoreGlobalUpdates = ProfileGlobalUpdates & {
+	AddActiveUpdate: (self: StoreGlobalUpdates, update_data: { any }) -> (),
+	ChangeActiveUpdate: (self: StoreGlobalUpdates, update_id: number, update_data: { any }) -> (),
+	ClearActiveUpdate: (self: StoreGlobalUpdates, update_id: number) -> (),
+}
+
+type NotReleasedHandler =
+	"ForceLoad"
+	| "Steal"
+	| (placeId: number, jobId: string) -> "Repeat" | "Cancel" | "ForceLoad" | "Steal"
+
+export type ProfileService = {
+	--- Set to false when the Roblox server is shutting down. ProfileStore methods should not be called after this
+	--- value is set to false.
+	ServiceLocked: boolean,
+
+	--- Analytics endpoint for DataStore error logging.
+	--- {error_message, profile_store_name, profile_key}.
+	IssueSignal: Signal<string, string, string>,
+
+	--- Analytics endpoint for cases when a DataStore key returns a value that has all or some of it's profile components set to invalid data types. E.g., accidentally setting Profile.Data to a non table value.
+	--- {profile_store_name, profile_key}
+	CorruptionSignal: Signal<string, string>,
+
+	--- Analytics endpoint for cases when DataStore is throwing too many errors and it's most likely affecting your game really really bad - this could be due to developer errors or due to Roblox server problems. Could be used to alert players about data store outages.
+	CriticalStateSignal: Signal<boolean>,
+
+	--- ProfileStore objects expose methods for loading / viewing profiles and sending global updates.
+	--- Equivalent of `:GetDataStore()` in Roblox `DataStoreService` API.
+	GetProfileStore: <Data>(store_index: string, profile_template: Data) -> ProfileStore<Data>,
+}
+
+export type ProfileStore<Data> = {
+	--- `ProfileStore.Mock` is a reflection of methods available in the `ProfileStore` object with the exception of profile operations being performed on profiles stored on a separate, detached "fake" DataStore that will be forgotten when the game session ends. You may load profiles of the same key from `ProfileStore` and `ProfileStore.Mock` in parallel - these will be two different profiles because the regular and mock versions of the same `ProfileStore` are completely isolated from each other.
+	Mock: ProfileStore<Data>,
 
 	LoadProfileAsync: (
-		self: ProfileStore<T>,
+		self: ProfileStore<Data>,
 		profile_key: string,
-		not_released_handler: ("ForceLoad" | "Steal" | (
-			place_id: number?,
-			game_job_id: string?
-		) -> "Repeat" | "Cancel" | "ForceLoad" | "Steal")?
-	) -> Profile<T>?,
+		not_released_handler: NotReleasedHandler?
+	) -> Profile<Data>?,
+
+	--- Used to create and manage `Active` global updates for a specified `Profile`. Can be called on any Roblox server of your game. Updates should reach the recipient in less than 30 seconds, regardless of whether it was called on the same server the `Profile` is session-locked to.
 	GlobalUpdateProfileAsync: (
-		self: ProfileStore<T>,
+		self: ProfileStore<Data>,
 		profile_key: string,
-		update_handler: (global_updates: GlobalUpdates) -> ()
+		update_handler: (global_updates: StoreGlobalUpdates) -> ()
 	) -> GlobalUpdates?,
-	ViewProfileAsync: (self: ProfileStore<T>, profile_key: string, version: string?) -> UnsafeProfile<T>?,
+
+	--- Attempts to load the latest profile version (or a specified version via the `version` argument) from the DataStore without claiming a session lock. Returns `nil` if such version does not exist. Returned `Profile` will not auto-save and releasing won't do anything. Data in the returned `Profile` can be changed to create a payload which can be saved via [Profile:OverwriteAsync()](https://madstudioroblox.github.io/ProfileService/api/#profileoverwriteasync). `:ViewProfileAsync()` is the the prefered way of viewing player data without editing it.
+	ViewProfileAsync: (
+		self: ProfileStore<Data>,
+		profile_key: string,
+		version: string?
+	) -> UnsafeProfile<Data>?,
+
+	--- Creates a profile version query using [DataStore:ListVersionsAsync()](https://developer.roblox.com/en-us/api-reference/function/DataStore/ListVersionsAsync). Results are retrieved through `ProfileVersionQuery:NextAsync()`. Date definitions are easier with the [DateTime](https://developer.roblox.com/en-us/api-reference/datatype/DateTime) library. User defined day and time will have to be converted to [unix time](https://en.wikipedia.org/wiki/Unix_time) while taking their timezone into account to expect the most precise results, though you can be rough and just set the date and time in the UTC timezone and expect a maximum margin of error of 24 hours for your query results.
 	ProfileVersionQuery: (
-		self: ProfileStore<T>,
+		self: ProfileStore<Data>,
 		profile_key: string,
 		sort_direction: Enum.SortDirection?,
 		min_date: (number | DateTime)?,
 		max_date: (number | DateTime)?
-	) -> ProfileVersionQuery<T>,
-	WipeProfileAsync: (self: ProfileStore<T>, profile_key: string) -> boolean,
+	) -> ProfileVersionQuery<Data>,
+
+	--- Use `:WipeProfileAsync()` to erase user data when complying with right of erasure requests. In live Roblox servers `:WipeProfileAsync()` must be used on profiles created through `ProfileStore.Mock` after `Profile:Release()` and it's known that the `Profile` will no longer be loaded again.
+	WipeProfileAsync: (self: ProfileStore<Data>, profile_key: string) -> boolean,
 }
 
-type Profile<T> = {
-	Data: T,
+export type Profile<Data> = {
+	--- `Profile.Data` is the primary variable of a Profile object. The developer is free to read and write from the table while it is automatically saved to the [DataStore](https://developer.roblox.com/en-us/api-reference/class/DataStoreService). `Profile.Data` will no longer be saved after being released remotely or locally via `Profile:Release()`.
+	Data: Data,
+
+	--- A table containing data about the profile itself, it is saved on the same DataStore key together with `Profile.Data`.
 	MetaData: {
+		--- os.time() timestamp of profile creation
 		ProfileCreateTime: number,
+		--- Amount of times the profile was loaded
 		SessionLoadCount: number,
+		--- Set to a session link if a Roblox server is currently the owner of this profile; nil if released.
+		--- {place_id, game_job_id}
 		ActiveSession: { any }?,
+		--- Saved and auto-saved just like `Profile.Data`.
 		MetaTags: { [string]: any },
+		--- The most recent version of MetaData.MetaTags which has been saved to the DataStore during the last auto-save or `Profile:Save()` call.
 		MetaTagsLatest: { any },
 	},
-	RobloxMetaData: { any },
-	UserIds: { number },
-	KeyInfo: DataStoreKeyInfo,
-	GlobalUpdates: GlobalUpdates,
 
+	--- This signal fires after every auto-save, after `Profile.MetaData.MetaTagsLatest` has been updated with the version that's guaranteed to be saved. `MetaTagsUpdated` will fire regardless of whether `MetaTagsLatest` changed after update.
 	MetaTagsUpdated: Signal<{ any }>,
+
+	--- Table that gets saved as [Metadata](https://create.roblox.com/docs/cloud-services/datastores#metadata) of a DataStore key belonging to the profile. The way this table is saved is equivalent to using `DataStoreSetOptions:SetMetaData(Profile.RobloxMetaData)` and passing the `DataStoreSetOptions` object to a `:SetAsync()` call, except changes will truly get saved on the next auto-update cycle or when the profile is released.
+	RobloxMetaData: { any },
+
+	--- Readonly array of user ids associated with this profile. Entries must be added with `Profile:AddUserId()` and removed with `Profile:RemoveUserId()`.
+	UserIds: { number },
+
+	KeyInfo: DataStoreKeyInfo,
+
 	KeyInfoUpdated: Signal<DataStoreKeyInfo>,
 
+	--- This is the `GlobalUpdates` object tied to this specific `Profile`. It exposes `GlobalUpdates` methods for update processing.
+	GlobalUpdates: ProfileGlobalUpdates,
+
+	--- Returns `true` while the profile is session-locked and saving of changes to `Profile.Data` is guaranteed.
 	IsActive: () -> boolean,
-	GetMetaTag: (self: Profile<T>, tag_name: string) -> any,
-	Reconcile: (self: Profile<T>) -> (),
-	ListenToRelease: (self: Profile<T>, (place_id: any, game_job_id: any) -> ()) -> Connection,
-	Release: (self: Profile<T>) -> (),
-	ListenToHopReady: (self: Profile<T>, () -> ()) -> Connection,
-	AddUserId: (self: Profile<T>, user_id: number) -> (),
-	RemoveUserId: (self: Profile<T>, user_id: number) -> (),
-	Identify: (self: Profile<T>) -> string,
-	SetMetaTag: (self: Profile<T>, tag_name: string, value: any) -> (),
-	Save: (self: Profile<T>) -> (),
+
+	--- Equivalent to `Profile.MetaData.MetaTags[tag_name]`.
+	GetMetaTag: (self: Profile<Data>, tag_name: string) -> any,
+
+	--- Fills in missing fields inside `Profile.Data` from `profile_template` table that was provided when calling `ProfileService.GetProfileStore()`. It's often necessary to use `:Reconcile()` if you're applying changes to your `profile_template` over the course of your game's development after release.
+	Reconcile: (self: Profile<Data>) -> (),
+
+	--- Listener functions subscribed to `Profile:ListenToRelease()` will be called when the profile is released remotely (Being `"ForceLoad"`'ed on a remote server) or locally (`Profile:Release()`). In common practice, the profile will rarely be released before the player leaves the game so it's recommended to simply [:Kick()](https://developer.roblox.com/en-us/api-reference/function/Player) the Player when this happens.
+	ListenToRelease: (self: Profile<Data>, (place_id: any, game_job_id: any) -> ()) -> Connection,
+
+	--- Removes the session lock for this profile for this Roblox server. Call this method after you're done working with the `Profile` object. Profile data will be immediately saved for the last time.
+	Release: (self: Profile<Data>) -> (),
+
+	--- In many cases ProfileService will be fast enough when loading and releasing profiles as the player teleports between places belonging to the same universe / game. However, if you're experiencing noticable delays when loading profiles after a universe teleport, you should try implementing `:ListenToHopReady()`. [Example](https://madstudioroblox.github.io/ProfileService/api/#profilelistentohopready)
+	ListenToHopReady: (self: Profile<Data>, () -> ()) -> Connection,
+
+	--- Associates a `UserId` with the profile. Multiple users can be associated with a single profile by calling this method for each individual `UserId`. The primary use of this method is to comply with GDPR (The right to erasure).
+	AddUserId: (self: Profile<Data>, user_id: number) -> (),
+
+	--- Unassociates `UserId` with the profile if it was initially associated.
+	RemoveUserId: (self: Profile<Data>, user_id: number) -> (),
+
+	--- Returns a string containing DataStore name, scope and key, example return: `"[Store:"GameData";Scope:"Live";Key:"Player_2312310"]"`
+	Identify: (self: Profile<Data>) -> string,
+
+	--- Equivalent to `Profile.MetaData.MetaTags[tag_name] = value`. Use for tagging your profile with information about itself.
+	SetMetaTag: (self: Profile<Data>, tag_name: string, value: any) -> (),
+
+	--- Call `Profile:Save()` to quickly progress `GlobalUpdates` state or to speed up the propagation of `Profile.MetaData.MetaTags` changes to `Profile.MetaData.MetaTagsLatest`. `Profile:Save()` **should not be called for saving** `Profile.Data` or `Profile.MetaData.MetaTags` because it's already done for you automatically.
+	Save: (self: Profile<Data>) -> (),
 }
 
-type UnsafeProfile<T> = Profile<T> & {
-	ClearGlobalUpdates: (self: UnsafeProfile<T>) -> (),
-	OverwriteAsync: (self: UnsafeProfile<T>) -> (),
+export type UnsafeProfile<Data> = Profile<Data> & {
+	--- Clears all global update data (active or locked) for a profile payload. It may be desirable to clear potential "residue" global updates (e.g. pending gifts) which were existing in a snapshot which is being used to recover player data through `:ProfileVersionQuery()`.
+	ClearGlobalUpdates: (self: UnsafeProfile<Data>) -> (),
+
+	--- Pushes the `Profile` payload to the DataStore (saves the profile) and releases the session lock for the profile.
+	OverwriteAsync: (self: UnsafeProfile<Data>) -> (),
 }
 
 local SETTINGS = {
@@ -2104,10 +2202,7 @@ end
 
 -- New ProfileStore:
 
-function ProfileService.GetProfileStore<T>(
-	profile_store_index: string | { Name: string, Scope: string? },
-	profile_template: T
-): ProfileStore<T>
+function ProfileService.GetProfileStore(profile_store_index, profile_template)
 	local profile_store_name
 	local profile_store_scope = nil
 
@@ -2340,4 +2435,4 @@ task.spawn(function()
 	)
 end)
 
-return ProfileService
+return ProfileService :: ProfileService
