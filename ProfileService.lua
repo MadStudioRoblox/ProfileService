@@ -2222,7 +2222,7 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 	local profile_store
 	profile_store = {
 		Mock = {
-			LoadProfileAsync = function(_, profile_key, not_released_handler)
+			LoadProfileAsync = function(_, profile_key, not_released_handler): typeof(profile_store.Mock) & typeof(Profile) & {Data: typeof(profile_template)}
 				return profile_store:LoadProfileAsync(profile_key, not_released_handler, UseMockTag)
 			end,
 			GlobalUpdateProfileAsync = function(_, profile_key, update_handler)
