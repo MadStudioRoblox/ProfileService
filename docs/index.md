@@ -31,5 +31,9 @@ If you need help integrating ProfileService into your project, [join the discuss
 
 ProfileService protects your data only from the relevant Roblox server problems. **It's completely stacked** when it comes to protecting your game data from [item duplication exploits](https://www.youtube.com/watch?v=Bz5Rje4HnM4).
 
-ProfileService is striving to be a DataStore solution that is the most accurate implementation of data storage following the
+ProfileService is striving to be a DataStore solution that is the most accurate implementation of data storage
+
+https://github.com/MadStudioRoblox/ProfileService/assets/168960448/aeec1770-7dc3-4073-95c2-c583ddfef0a0
+
+ following the
 development guidelines and practices provided in the [official Roblox API](https://developer.roblox.com/en-us/articles/Data-store).
