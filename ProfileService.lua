@@ -2231,8 +2231,8 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 			ViewProfileAsync = function(_, profile_key, version)
 				return profile_store:ViewProfileAsync(profile_key, version, UseMockTag)
 			end,
-			FindProfileVersionAsync = function(_, profile_key, sort_direction, min_date, max_date)
-				return profile_store:FindProfileVersionAsync(profile_key, sort_direction, min_date, max_date, UseMockTag)
+			ProfileVersionQuery = function(_, profile_key, sort_direction, min_date, max_date)
+				return profile_store:ProfileVersionQuery(profile_key, sort_direction, min_date, max_date, UseMockTag)
 			end,
 			WipeProfileAsync = function(_, profile_key)
 				return profile_store:WipeProfileAsync(profile_key, UseMockTag)
