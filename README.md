@@ -1,5 +1,7 @@
 # Madwork - ProfileService
 
+**[FOR NEW PROJECTS - USE ProfileStore (Click here)](https://github.com/MadStudioRoblox/ProfileStore)**
+
 ProfileService is a stand-alone ModuleScript that specialises in loading and auto-saving
 DataStore profiles.
 
