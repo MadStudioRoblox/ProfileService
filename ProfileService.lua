@@ -2100,15 +2100,11 @@ function ProfileStore:ProfileVersionQuery(profile_key, sort_direction, min_date,
 		error("[ProfileService]: Invalid profile_key")
 	end
 
-	if ProfileService.ServiceLocked == true then
+	if ProfileService.ServiceLocked == true or _use_mock == UseMockTag or UseMockDataStore == true then
 		return setmetatable({}, ProfileVersionQuery) -- Silently fail :Next() requests
 	end
 
 	WaitForPendingProfileStore(self)
-
-	if _use_mock == UseMockTag or UseMockDataStore == true then
-		error("[ProfileService]: :ProfileVersionQuery() is not supported in mock mode")
-	end
 
 	-- Type check:
 	if sort_direction ~= nil and (typeof(sort_direction) ~= "EnumItem"
@@ -2231,8 +2227,8 @@ function ProfileService.GetProfileStore(profile_store_index, profile_template) -
 			ViewProfileAsync = function(_, profile_key, version)
 				return profile_store:ViewProfileAsync(profile_key, version, UseMockTag)
 			end,
-			FindProfileVersionAsync = function(_, profile_key, sort_direction, min_date, max_date)
-				return profile_store:FindProfileVersionAsync(profile_key, sort_direction, min_date, max_date, UseMockTag)
+			ProfileVersionQuery = function(_, profile_key, sort_direction, min_date, max_date)
+				return profile_store:ProfileVersionQuery(profile_key, sort_direction, min_date, max_date, UseMockTag)
 			end,
 			WipeProfileAsync = function(_, profile_key)
 				return profile_store:WipeProfileAsync(profile_key, UseMockTag)
