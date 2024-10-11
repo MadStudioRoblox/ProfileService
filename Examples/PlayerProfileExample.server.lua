@@ -63,7 +63,7 @@ local function PlayerAdded(player)
 	else
 		-- The profile couldn't be loaded possibly due to other
 		--   Roblox servers trying to load this profile at the same time:
-		player:Kick() 
+		player:Kick()
 	end
 end
 
@@ -71,7 +71,7 @@ end
 
 -- In case Players have joined the server earlier than this script ran:
 for _, player in ipairs(Players:GetPlayers()) do
-	coroutine.wrap(PlayerAdded)(player)
+	task.spawn(PlayerAdded, player)
 end
 
 ----- Connections -----
