@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/api/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/troubleshooting/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/tutorial/basic_usage/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/tutorial/developer_products/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://madstudioroblox.github.io/ProfileService/tutorial/settingup/</loc>
+         <lastmod>2024-10-13</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+</urlset>
