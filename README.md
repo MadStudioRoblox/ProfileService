@@ -2,6 +2,8 @@
 
 **[FOR NEW PROJECTS - USE ProfileStore (Click here)](https://github.com/MadStudioRoblox/ProfileStore)**
 
+(This project is no longer supported - it's been stable for a long while and migration to [ProfileStore](https://github.com/MadStudioRoblox/ProfileStore) is possible for most projects)
+
 ProfileService is a stand-alone ModuleScript that specialises in loading and auto-saving
 DataStore profiles.
 
